@@ -87,12 +87,17 @@ else
 fi
 
 #---------------------------------------------------------------------------
-step "Browser demo's port of the walk"
+step "Browser demo's port of the CPU half"
 #---------------------------------------------------------------------------
-# demo/plugin.js walks in JavaScript what Ant.cpp walks in C++. A port that
-# drifts still walks a plausible ant, so the plugin's own Ant.cpp, Controls.cpp
-# and Clock.h and the port in plugin.js are run through the same scenario and
-# must print the same thing, bit for bit (demo/tools/crosscheck/).
+# demo/plugin.js flies in JavaScript the camera Flight.cpp flies in C++, and
+# builds the blackbody and orbit tables (Blackbody.cpp, Geodesic.cpp) and every
+# pass's uniforms (Slipstream.cpp's ProcessOpenGL) the same way. A port that
+# drifts still flies a plausible ship, so demo/tools/crosscheck/ runs the
+# plugin's own Controls/Flight/Blackbody/Geodesic.cpp and the port through one
+# scenario, and the REAL plugin class (in a GL context, its uniforms read back
+# out of its programs) and the port's frame logic through another, and both
+# must print the same thing, bit for bit, with the plugin's libm results
+# replayed into the port. Needs node and a GL context; about half a minute.
 if [[ -f demo/tools/crosscheck/crosscheck.sh ]]; then
 	if ! command -v node >/dev/null 2>&1; then
 		echo "   skipped: no node on this machine"
@@ -100,7 +105,7 @@ if [[ -f demo/tools/crosscheck/crosscheck.sh ]]; then
 		printf '%s\n' "$out" | sed 's/^/   /'
 	else
 		printf '%s\n' "$out" | tail -14
-		fail "the demo's port of the walk has drifted from source/Ant.cpp"
+		fail "the demo's port of the CPU half has drifted from the plugin's C++"
 	fi
 elif [[ -d demo ]]; then
 	fail "demo/ exists but demo/tools/crosscheck/crosscheck.sh does not"
