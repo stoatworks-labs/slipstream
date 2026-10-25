@@ -139,7 +139,7 @@ The black hole's shadow and disc are opaque.
 ### Measured offline, on macOS
 
 `tools/verify.sh` passes on this machine (Apple M4 Max, macOS 26.4.1) against a fresh
-universal Release build (25 October 2026). It runs every picture check at **two rasters**,
+universal Release build (25 October 2026, 14 minutes). It runs every picture check at **two rasters**,
 1280×720 and 320×180, and all but two of them again on **Apple's software renderer** at
 320×180. What it establishes:
 
@@ -166,7 +166,18 @@ universal Release build (25 October 2026). It runs every picture check at **two 
 | shaders | all 6 compile through `glslc`, not merely through Apple's driver |
 | the bundles | both universal (`x86_64 arm64`), export `plugMain`, ad-hoc sign; `oxbow` reports `SW Slipstream` / `SR01` / `source` and `SW Slip Over` / `SR02` / `effect` and renders through both |
 
-BENCH-TABLE
+**Cost** on this Mac's GPU (`sliptest --bench`, median ms a frame, each frame timed with `glFinish`):
+
+| plugin | moment | 720p | 1080p | 4K |
+| --- | --- | --- | --- | --- |
+| SW Slipstream | Hyperspace, normal space | 0.34 | 0.58 | 1.93 |
+| SW Slipstream | Hyperspace, in transit | 0.56 | 1.05 | 3.53 |
+| SW Slip Over | Hyperspace, jumping | 0.71 | 1.26 | 4.51 |
+| SW Slip Over | Warp, the rubber band | 0.63 | 1.02 | 3.64 |
+| SW Slipstream | Wormhole, in transit | 1.46 | 2.93 | 10.85 |
+| SW Slip Over | Black Hole, held | 0.79 | 1.50 | 5.12 |
+
+The Wormhole is the expensive one: its clouds are three layers of domain-warped noise a pixel.
 
 **Not tested anywhere else.** It has never been loaded into Resolume, on macOS or
 Windows, and has never been built for Windows (the workflows in `.github/` have never
