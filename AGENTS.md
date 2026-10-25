@@ -280,6 +280,88 @@ README's Status table. Assumed, and not checked by anything:
 - Wyman et al.'s CIE fit is half the tabulated x̄ at 700 nm; 2000 K comes out 0.0031 from
   the locus in uv. Close enough for stars and a disc, not for a lamp.
 
+## The browser demo (2026-10-25)
+
+`demo/` is <https://slipstream-demo.stoatworks-labs.com>, built to the fleet's
+`resolume-demo` kit rules (`~/Projects/resolume/specs/DEMO-BRIEF.md`) by a sub-agent of
+the release session, from langton's demo. What a reader of it must know:
+
+- **The shaders are the plugin's**, all seven pieces plus kVersion, spliced by
+  `demo/tools/check_shaders.py --write` into `demo/shaders.js` and compared character for
+  character; kSceneFragment's two adjacent raw strings (MSVC's cap) are joined as the
+  compiler joins them, and anything but whitespace between them fails. It also fails on a
+  piece it does not list and on a change to the JOIN on either side (`Assemble()`,
+  InitGL's four stages -- the star pass assembles kCommon into its vertex stage too --
+  and plugin.js's copy). **All four programs compile and link in WebGL2 as spliced**
+  (ANGLE on Metal, M4 Max). `LightGain` is set by the plugin and declared by the scene
+  shader but read by nothing, so it is inactive in both.
+- **The CPU half is a port, held to the C++ to the bit.** `demo/plugin.js`'s PORT block
+  (Controls, Flight, Blackbody, Geodesic) and FRAME block (ProcessOpenGL's CPU half,
+  written to RETURN each pass's uniforms) run under node in `demo/tools/crosscheck/`:
+  `printer.cpp` on the plugin's own four GL-free sources (85,019 lines: every slider
+  position, every look's script across J, every drive at 60/50/30 fps, the camera, all
+  675 whole-frame Transit Times of the first trap, both tables), and `uniforms.cpp`
+  driving the REAL `SlipstreamPlugin` in a CGL context through `scenario.mjs`'s 9,864
+  frames of both plugins (every look, every drive, a jump abandoned halfway, a fader
+  scrubbed back through the flash points, raster changes, a stalled, reversed and jumping
+  clock), reading every active uniform back with glGetUniform after each frame.
+  **Identical**: every line, every frame's CPU doubles, all 917,352 uniform values.
+- **Two things had to be taken out for that to be exact, and both are measured instead.**
+  V8's Math is not Apple's libm: about one distinct exp, expm1, asin or sin/cos result in
+  ten differs in the last bit (pow and log2 never did). `libm_record.c` is interposed
+  (dyld `__interpose`, DYLD_INSERT_LIBRARIES) to record every libm call the C++ makes, and
+  `replay.mjs` answers the port's Math calls from it; calls clang folded at build time
+  (the bisection's first steps in DistanceForShadow, log of constants, sin of the
+  reference FOV) fall back to V8 and are counted, and the output is identical anyway. And
+  arm64's default `-ffp-contract=on` fuses multiply-adds that JavaScript cannot, so the C++
+  is built `-ffp-contract=off` (the x86_64 slice's arithmetic). **On V8's own Math and
+  against the native arm64 build** -- what the page actually is against what ships --
+  every uniform in the 9,864 frames is still the same float; the CPU doubles differ by up
+  to 1e-10 (the hole's distance); 5 of 1,051,648 table floats differ by one ulp from the
+  arm64 build's (none from the strict one's).
+- **Mutants**: twelve one-token mutants of the port (the first trap's fix undone, the
+  camera's trapezoid, the orbit equation's 3u², a CIE lobe weight, Hole Size's range, the
+  warp's spring, the sky's mean light, the flash's age at mid-shutter, the whirlpool's spin
+  rate, a new look's flash, the clock's jump rule, the Over's clip levels): all twelve
+  caught (2026-10-25), the first six by the port's printout, the rest by the frames'.
+- **The GL half only a reader checks** (the bindings, the additive blend, the buffers),
+  so frames were compared ONCE with `sliptest --out` at the same settings: 1280x720, 180
+  frames on the f/60 clock, Drive Fader held mid-journey, the page's last frame read
+  straight off its canvas, the Over's clip the kit's geometry card handed to the harness
+  with `--clip`. SW Slipstream, all four looks: 99.95-99.995% of pixels identical, none
+  more than one level of 255 out. SW Slip Over, Hyperspace and Warp: 99.98% and 99.995%,
+  none more than one level. SW Slip Over, Black Hole: 99.87% identical; 472 pixels
+  (0.05%) differ by 5 to 11 levels, nearly all on the disc's hard outer edge and the
+  shadow's rim, where a float rounding decides disc or clip against the bright card.
+- **Decided without asking**: both plugins on one page (langton's shape, `?plugin=over`,
+  a new instance at the defaults); Stars (FF_TYPE_INTEGER 0-20,000) a dropdown of fifteen
+  values including the default 4,000, the slot stored; Jump a toggle released after a
+  frame; a Look picker that sets the plugin's own Look control; the Over's clips `scene`
+  (default), `grid`, `spot`, `bars`, `ramp`, `detail`, `alpha`; the blackbody table falls
+  back to RGBA16F (said under the picture) without OES_texture_float_linear; the
+  harness's test hooks not ported, their uniforms sent at the plugin's operating values;
+  the clock's unit vote not ported (the page's unit is seconds). Paused, dt is 0, so the
+  streaks are points: the plugin's behaviour with a stopped clock, not hidden.
+- **Differences, all said on the page**: the CPU half and the frame logic are ports (and
+  how each is checked); GLSL ES 3.00 (the star pass's vertex-stage blackbody fetch has
+  ES's default lowp sampler, which the kit does not override); no audio (the plugin has
+  none); events and integers; the page's clock; the Wormhole's cost under the kit's 0.1 s
+  cap; the Over's clips; the tables built at load (~160 ms here).
+- **Verified headlessly** (cdpshot's Chrome, `--use-angle=metal`, console and Log events
+  collected): no console errors, under the page's own `_headers` CSP too; every look of
+  both plugins renders; Exposure moved while paused changes the picture and moving it back
+  and forth again is bit-identical; the Look picker, the Plugin switch (Clip controls
+  appear, defaults return), Mix 0 (the clip back), Jump released after a frame; with
+  EXT_color_buffer_float hidden the page stops and says so, with OES_texture_float_linear
+  hidden it says the table is half float.
+- **Live** needs a proxied AAAA 100:: DNS record for `slipstream-demo` (the zone's custom
+  domains are full; `wrangler.toml` has a ROUTE), and `deploy.yml` needs the repo's
+  `CLOUDFLARE_API_TOKEN` secret and `CLOUDFLARE_ACCOUNT_ID` variable. The live page will
+  log one console error that is not the page's: the zone's injected challenge script,
+  blocked by `script-src 'self'`, as on every `*-demo` host.
+- `stoatworks-backend/resolume-demo/sync.sh` does not list slipstream yet: add it, or the
+  vendored kit here is one nothing checks.
+
 ## Not done, and open questions
 
 - Never loaded into Resolume on macOS; on Windows only by the fleet's gate; no GPU but this

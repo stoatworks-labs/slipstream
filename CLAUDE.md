@@ -114,6 +114,26 @@ shader's second half).
 - Public: `github.com/stoatworks-labs/slipstream`, checkout `~/Projects/resolume/slipstream`
   (built in `~/dev/slipstream` and moved). Changes go through a worktree.
 
+## Browser demo
+- `demo/` is the page at https://slipstream-demo.stoatworks-labs.com (Cloudflare Worker
+  `slipstream-demo`, a ROUTE on a proxied AAAA 100:: record -- the zone's custom domains
+  are full; deleting the record takes the page dark with a green deploy). `deploy.yml`
+  redeploys it on a push to main; by hand: `cf-run npx wrangler deploy`.
+- `demo/shaders.js` is GENERATED: after changing `source/Shaders.cpp` run
+  `python3 demo/tools/check_shaders.py --write`; verify.sh fails on drift, on a new piece
+  the check does not list, and on a change to how pieces are joined.
+- `demo/plugin.js`'s PORT block (Controls, Flight, Blackbody, Geodesic) and FRAME block
+  (ProcessOpenGL's CPU half: it RETURNS each pass's uniforms) are held to the C++ by
+  `demo/tools/crosscheck/crosscheck.sh` (verify.sh runs it; needs node, the submodule and
+  a GL context, ~25 s): change the C++ and the port with it. A new uniform is a new
+  `uf(...)` line in the FRAME block, or the check fails on the plugin's value.
+- The check replays the plugin's own libm results into the port (`libm_record.c`,
+  interposed with DYLD_INSERT_LIBRARIES) and builds the C++ `-ffp-contract=off`; without
+  both, V8's Math and arm64's fused multiply-adds move the doubles' last bits.
+- `demo/vendor/` is the shared kit: never edit it, re-vendor with
+  `stoatworks-backend/resolume-demo/sync.sh` (slipstream is not on its list yet; from a
+  worktree, use the STOATWORKS_ROOTS symlink trick).
+
 ## Not done yet
 - Never loaded into Resolume on macOS (`oxbow` only). On Windows the fleet's Arena gate
   (`plugin-bench`, win-lab, Mesa llvmpipe) is the only Resolume it has met. No GPU but this
