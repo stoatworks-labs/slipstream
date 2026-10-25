@@ -38,29 +38,37 @@ shader's second half).
 - Everything: `tools/verify.sh` (shader hygiene, `glslc`, the submodule pin, a fresh
   universal build with no warnings, both bundles through lipo, plist, ad-hoc signature,
   `oxbow probe` and `selftest`; every GPU check at 1280x720 and 320x180; most of them again
-  on Apple's software renderer; `--offline`; `--pipe` for both; the negative controls; 13
+  on Apple's software renderer; `--offline`; `--pipe` for both; the negative controls; 23
   mutants; the sweep; the bench). In a sandboxed Claude session set `TMPDIR` to a writable
   scratch directory, or `glslc.sh` hangs on its heredoc. It loads both bundles in
   `oxbow` from `~/Projects/resolume/oxbow/build/oxbow` or `OXBOW=...`, and skips that step
   (saying so) when there is none: build oxbow out of tree (`cmake -S
   ~/Projects/resolume/oxbow -B <scratch>`) rather than in its shared checkout.
 - **No GL** (`--offline` runs these and their negatives): `--journey` (each Drive's timings,
-  J only forward), `--geodesic` (the orbit table against weak field, Bozza's strong-deflection
-  limit and a quadrature of the first integral), `--planck` (the blackbody colours against
-  Kang et al.'s Planckian locus), `--names`, `--cues`.
+  J only forward, every whole-frame Transit Time and every Cruise Time the slider gives on a
+  host's clock, the Fader's wrap), `--geodesic` (the orbit table against weak
+  field, Bozza's strong-deflection limit and a quadrature of the first integral, and that it
+  reaches every ray of the approach), `--planck` (the blackbody colours against Kang et al.'s
+  Planckian locus), `--names`, `--cues`.
 - **The streaks**: `--streak` (one star against a simulated open shutter, light per unit
   length and in all), `--energy` (a star's whole light at rest and at three speeds),
   `--copies` (past one pass of the field a shutter, against the simulated periodic field).
-- **The Over**: `--identity` (at rest, every look, the clip back to the bit), `--smear` (a
-  point of the clip under hyperspace's smear: the inward segment, evenly lit, A / k).
+- **The Over**: `--identity` (at rest, every look, Stars 0, the default Cruise Speed: the
+  clip back to the bit; a hair into a jump, the clip as sharp), `--smear` (a point of the
+  clip under hyperspace's smear: the inward segment, evenly lit, A / k; cruising smears
+  nothing).
 - **The black hole**: `--shadow` (its size against Synge's closed form), `--einstein` (a dot
   behind it, the ring, against the harness's own RK4 ray), `--disc` (Doppler 0 symmetric,
   the approaching side brighter and bluer, the face-on profile against the harness's own
   rays and sqrt( 1 - 3/r )), `--ring` (the corona along the harness's own rays; the brightest
-  ring on the shadow's edge).
+  ring on the shadow's edge), `--approach` (coming in from 100,000 GM/c², the Over is the
+  clip wherever the bending is under a tenth of a pixel; GPU only), `--plunge` (the frame
+  that crosses the white hole late is dark, not plain space).
+- **The Wormhole**: `--chord` (streaks whose ends the whirlpool turns apart fade; the rest
+  are whole).
 - **The rest**: `--clock`, `--seam`, `--resize`, `--state`.
-- The checks can fail: `./build/sliptest --negative` (17 wrong models), `tools/mutate.sh`
-  (14 mutants).
+- The checks can fail: `./build/sliptest --negative` (20 wrong models), `tools/mutate.sh`
+  (23 mutants).
 - No dead controls: `python3 tools/sweep.py` (both plugins).
 - Render cost: `./build/sliptest --bench`.
 - `SLIPTEST_RENDERER=software` runs any of it on Apple's software renderer.
@@ -69,15 +77,21 @@ shader's second half).
 ## Notes
 - **Light is exposure until the composite.** Everything adds in exposure (half float);
   the composite develops it as film, 1 - exp( -E ) per channel. The clip comes in through
-  the inverse (`kIntakeFragment`), so the Over at rest is the clip to the bit. Fade the
-  clip with `fadeLight()` (in light), never by scaling its exposure.
+  the inverse (`kIntakeFragment`), so the Over at rest (Stars 0) is the clip to the bit. Fade
+  the clip with `fadeLight()` (in light), never by scaling its exposure. Anything that moves
+  the clip by even a hundredth of a pixel moves its hard edges by levels (a lit window is 60
+  times its wall in exposure), so a check on the Over measures a mean or a sharpness where
+  the geometry moves, never equality.
 - **Distances are in field units; speeds and Clip Depth are in D = 4 of them.** Two bugs
   so far came from mixing them. `Flight.cpp` multiplies by `kDepth` at the one place it
   integrates; anything new that turns a D into a distance does the same.
 - **The camera's distance never reaches the GPU whole:** `PhaseZ()` is it mod D (stars),
   `LongZ()` mod 256 units (tunnel and clouds, whose noise lattices wrap there).
-- **J only moves forward** except under Drive Fader. A jump abandoned halfway carries on
-  through and out.
+- **J only moves forward** except under Drive Fader, where it follows Journey both ways but
+  is circular: a jump back of more than half a trip has gone round (a looping ramp's wrap
+  from 0.99 to 0 flies a hundredth forward, not the whole trip backwards). A jump abandoned
+  halfway carries on through and out. Leaving either rest (J 0 or 0.5) steps J off it by at
+  least an ulp, whatever is left of the frame.
 - **The black hole's tables are built once** (`geodesic::Get()`, about a tenth of a second,
   on first use) and read by hand with `texelFetch` (`tableAt`), so their interpolation is
   float and not the filter unit's fixed point.
@@ -101,10 +115,10 @@ shader's second half).
   (built in `~/dev/slipstream` and moved). Changes go through a worktree.
 
 ## Not done yet
-- Never loaded into Resolume on either platform. Never built for Windows. No GPU but this
-  Mac's has run it.
-- No GitHub repo, no release, no website page, no user guide, no browser demo, no OpenFX
-  port, no video, no presets. The workflows in `.github/` have never run.
+- Never loaded into Resolume on macOS (`oxbow` only). On Windows the fleet's Arena gate
+  (`plugin-bench`, win-lab, Mesa llvmpipe) is the only Resolume it has met. No GPU but this
+  Mac's and llvmpipe has run it.
+- No OpenFX port, no presets, no beat sync.
 
 ## Diagnostics
 

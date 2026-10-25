@@ -94,9 +94,9 @@ const char* NameOf( unsigned int id );
 
 enum class Look
 {
-	Hyperspace = 0,///< Star Wars: points stretch to streaks; the tunnel
-	Warp,          ///< Star Trek: the rubber band, the flash, warp streaks
-	Wormhole,      ///< Red Dwarf: the whirlpool, then clouds
+	Hyperspace = 0,///< points stretch to streaks; the tunnel
+	Warp,          ///< the rubber band, the flash, warp streaks
+	Wormhole,      ///< the whirlpool, then clouds
 	BlackHole,     ///< Schwarzschild: shadow, lensing, disc, corona
 	Count
 };

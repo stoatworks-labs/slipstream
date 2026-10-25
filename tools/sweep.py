@@ -75,7 +75,8 @@ SWEEP = {
     "Disc Heat": ("0.2", "0.8", HOLE, []),
     "Doppler": ("0", "1", HOLE, []),
     "Corona": ("0", "1", HOLE + ["Disc=0"], []),
-    "Clip Depth": ("0", "1", ["Cruise Speed=1", "Shutter=1"], []),
+    # In a jump: the clip cruises with the camera, so only a jump smears it.
+    "Clip Depth": ("0", "1", ["Look=Hyperspace"] + FADER + ["Journey=0.3", "Shutter=1"], []),
     "Clip Through": ("0", "1", ["Look=Hyperspace"] + FADER + ["Journey=0.5"], []),
     "Mix": ("0", "1", [], []),
 }

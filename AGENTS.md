@@ -26,7 +26,8 @@ shutter (a camera on auto exposure), so Shutter changes the streak and not the l
 
 Everything is exposure until the composite, which develops it as film: 1 − exp( −E ) per
 channel. Bright cores saturate white and keep their colour in their fringes; the clip
-comes in through the inverse of the curve, so the Over at rest is the clip to the bit.
+comes in through the inverse of the curve, so the Over at rest is the clip to the bit
+(with Stars at 0: otherwise the stars are laid over it).
 
 The journey is a phase J (0 normal space, 0.5 in transit, 1 back again); each look is a
 script over J (`PoseAt`), evaluated at the shutter's opening and its closing so that
@@ -49,9 +50,12 @@ blurs with the stars.
   images. So: three concentric cylinders of domain-warped cloud, not a neon tunnel.
 - **The black hole is Schwarzschild, not Kerr.** A spinning hole's shadow is lopsided and
   its rays leave their plane; the tables would be 3D. The disc spins (Keplerian), the hole
-  does not. The camera is a static observer, which is why the plunge stops at d = 3.05: a
-  static observer cannot exist inside the photon sphere, and the fade to black from there
-  and the white hole on the far side are **named cheats**.
+  does not. The camera is a static observer, held outside the photon sphere: the tables
+  sort a ray into escape or capture by its b alone, which is true only for a camera outside
+  r = 3 (inside it an outward ray below b_c escapes and one above it falls back). Static
+  observers exist anywhere outside the horizon; it is the tables that stop the plunge at
+  d = 3.05, and the fade to black from there and the white hole on the far side are
+  **named cheats**.
 - **Doppler defaults to 1.** The approaching side of the disc is far brighter (18 times in
   `--disc`'s geometry) and bluer. Interstellar's makers switched that off for the film
   (James, von Tunzelmann, Franklin and Thorne, Class. Quantum Grav. 32 (2015) 065001); the
@@ -59,11 +63,21 @@ blurs with the stars.
 - **The clip in hyperspace rides ahead at Clip Depth** and never comes nearer: the one
   cheat in the smear. Its light smears inward as a star's does (u uniform in [1, k],
   surface brightness kept), so a point of the clip becomes an evenly lit line and the
-  picture keeps its look rather than exploding past the camera.
+  picture keeps its look rather than exploding past the camera. It cruises with the
+  camera: k counts only the run beyond Cruise Speed, so the clip at rest is sharp at any
+  Cruise Speed and smears only in a jump.
+- **The Wormhole's streaks are straight chords.** A star's streak is drawn from its
+  shutter-open end to its shutter-close end, each turned by the whirlpool at its own
+  radius. Where the two turns differ by more than a quarter of a radian the chord is
+  nowhere near the star's spiral (it was a straight line across the frame on the way out),
+  so the star fades, gone by three quarters: the Wormhole's one cheat with the stars.
+  Drawing the spiral would mean covering an annulus a star.
 - **The star box's cross-section is the view at its far end** (from the vanishing point to
-  the frame's farthest corner, carried out to D). A side effect: the star field looks the
-  same at any Field of View, which matters only to the black hole's sky, the tunnel and the
-  clouds.
+  the frame's farthest corner, carried out to D). A side effect: the star field fills any
+  Field of View, but a wider view spreads the same stars through a wider box, further off
+  the line of flight, so it is dimmer (the mean pixel at rest 0.38 at 120° against 0.65 at
+  20°). Field of View also sets the black hole's held distance, since Hole Size is a share
+  of the frame: wider, and the camera holds nearer the hole and the disc fills more.
 - **The streaks are honest.** At hyperspeed each line carries L / ( f ρ D ) per unit
   length, two to three hundred times dimmer than the star was at rest. It reads as the
   films only because the brightest stars are far brighter than saturation (the Pareto
@@ -75,8 +89,12 @@ blurs with the stars.
 - **The sky behind the black hole is per pixel** (a star per cell of a cube face's grid at
   most, a Gaussian widened by what the hole adds to the pixel's footprint, the mean light
   where that is wider than a cell) rather than a cube map: resolution-independent, and a
-  star smeared by the hole blurs instead of aliasing. Stars at a cube face's edge can be
-  cut at the seam; not seen in renders, not fixed.
+  star smeared by the hole blurs instead of aliasing. A pixel reads cells out to five sigmas
+  in the face's smallest cells (a cell's angle shrinks by up to 1 + s² + t² towards the
+  edges), and within five sigmas of a seam the face across it too: each star belongs to one
+  face, so nothing is counted twice and nothing is cut. Before that, at Field of View 120°,
+  stars were cut off along the seams and the brightest came out square; the fix was judged
+  by eye on a render at 120°, and no check measures it.
 - **Generated files:** `source/StoatworksAbout*.h`, `ATTRIBUTIONS.md`, the README's
   attributions block, `.github/ISSUE_TEMPLATE/` and `.github/FUNDING.yml` come from
   stoatworks-backend's sync scripts since the project was registered (2026-10-25).
@@ -94,7 +112,55 @@ boundary, and only the demo film showed it (the Warp segment never left the prev
 look's transit). `Journey::Advance` now steps J off the rest by at least one ulp, and
 `--journey` runs every whole-frame Transit Time from 0.2 to 5 s at 60, 50 and 30 fps with a
 host-style clock (each dt a difference of two readings); with the fix undone 255 of 675
-never come back (`tools/mutate.sh`'s fourteenth mutant).
+never come back (a mutant in `tools/mutate.sh`).
+
+**So must a cruise.** The same trap at the other rest: Loop's cruise running out exactly
+on a frame's boundary left J on 0 with its timer reset, so Cruise Time 2 s or 20 s never
+jumped at all, at any frame rate. The guide's author found it sweeping all 1001 slider
+positions; `--journey` now does the same at 60, 50 and 30 fps, and leaving 0 steps J off
+it by an ulp as leaving 0.5 does.
+
+**A fader is circular.** J's 1 is its 0, and under Drive Fader a frame used to fly from
+the last Journey to the new one literally: a looping ramp's wrap from 0.99 to 0 flew the
+whole trip backwards in one frame, both flashes and all, every time round. A jump back of
+more than half a trip now counts as going round. Forward stays literal: the first version
+took the short way round both ways, which sent Journey set straight from 0 to 0.76 backwards
+through the exit, missing the white-out, and the sweep found Flash dead.
+
+**A table read linearly must hold something that is linear between its rows.** The end
+table held u_end = 1/r_min, which falls as 1/b across rows evenly spaced in ln( b − b_c ):
+read linearly between them it was 3e-4 out, and the Over's clip sat up to half a pixel out
+of place while the hole was far off. It holds b u_end now, which runs smoothly to 1. Before
+that the table also stopped at b = 22,000 while the hole comes in from 100,000: every ray
+past the last row read that row's u_end, and the first half second of every approach was
+a black frame streaked with radial lines. The guide's author and the video's both found it
+on film; `--shadow` and `--einstein` only ever looked at the held hole. `--approach` looks
+at the approach.
+
+**A mip level from an angle is never under a pixel.** The Over's clip behind the black
+hole was read at a level from the ray's angular footprint, which turned into pixels is
+never less than one and grows towards the corners: the whole clip was a little soft
+whenever there was a hole. It is the footprint on the clip, in the clip's pixels, now
+(1 for an unbent ray, the clip at its own resolution).
+
+**So is a smear's floor.** The hyperspace smear's level was `log2( max( spacing, 1 ) ) +
+0.5`, never under half a step: every smear blurred the clip by a pixel, however short. With
+the default Cruise Speed smearing the clip at rest, the Over at its defaults was soft from
+the first frame. The floor is 0 now, and cruising does not smear the clip. A sharpness
+measure caught it where equality could not: a smear a hundredth of a pixel long moves a
+hard edge by levels, since the clip is averaged in exposure. Summed slopes did not see the
+blur either (a blur leaves an edge's total rise alone); summed squared slopes do.
+
+**A flash point crossed at the end of a frame shows the pose at its close.** Out of the
+black hole the blackout ends and the white hole flashes at J 0.8. A frame whose shutter
+crossed 0.8 at its very end drew the pose there (plain space, the blackout over) with a
+flash that had had no time to expose: one frame of plain space between black and white.
+That frame is now black for the share of its open shutter before the crossing.
+
+**Exposure 8 is white until its last few frames.** The Wormhole's end light went from 8
+to 0 in one frame at the white-out (a cut from white, mean light 1.0 to 0.12, whatever
+Flash said). Fading the exposure evenly still left it white until the last eight frames;
+it fades so that its developed light falls evenly now, over a fifth of the exit.
 
 **D and field units.** Speeds and Clip Depth are in D (the field's period, 4 units);
 distances are in units. Twice something mixed them: the camera flew a quarter as far as
@@ -170,41 +236,63 @@ Apple's software renderer at 320×180.
 - `--disc`: mirror symmetry to 1/1024 of the brightest pixel (half float); the approach
   side by a factor of 1.3 at least (it is 18); the face-on profile to 3%.
 - `--ring`: 4% (the shader's 32-point midpoint rule against a 1e-3 rad RK4).
+- `--approach`: a mean of 1 level in 255 where the bending is under a tenth of a pixel.
+  GPU only: Apple's software renderer's sin and cos put a ray about a hundredth of a pixel
+  out, which on the card's hard edges is three levels on average.
+- `--chord`: streaks either gone (under 1e-6 of their light) or whole (to 1e-6), with a
+  margin of 0.05 rad round the fade's ends for the shader's float turn.
+- `--plunge`: a median ratio of pixel light, 0.1 against an expected 0.03; eight-bit
+  rounding of the dark sky is why it is a median over lit pixels.
+- `--identity`'s jump case: gradient energy 80% of the clip's (90% and 96% here; the old
+  floor gave 40%).
 - `--seam`: a ratio of two means of the same texture, three to one.
 - `--resize`: bit equality between two runs in one context; would not hold across
   contexts on Apple's software renderer (honeydew's trap), and is not asked to.
 
 ## Mutation testing
 
-`tools/mutate.sh`: 14 one-character mutants of the shipped GLSL and C++, each built
-arm64-only in a copy of the tree with only its named check run; all 14 caught (2026-10-25):
-the star's flux (`--streak`), one copy too many (`--copies`), the clip's exposure sign
-(`--identity`), the smear's direction (`--smear`), capture above b_c (`--shadow`), the
-photon's angular momentum sign and the emitter's time dilation (`--disc`), the corona's g⁴
-(`--ring`), the table's row for an escaping b (`--einstein`), the camera's trapezoids
-(`--clock`), entry's rate and the step off transit's rest (`--journey`), the orbit equation's 3u² (`--geodesic`), ȳ's peak
-(`--planck`).
+`tools/mutate.sh`: 23 one-character mutants of the shipped GLSL and C++, each built
+arm64-only in a copy of the tree with only its named check run; all 23 caught (2026-10-25):
+the star's flux (`--streak`), one copy too many (`--copies`), the clip's exposure sign and
+the smear's mip floor (`--identity`), the smear's direction and cruising smearing the clip
+(`--smear`), capture above b_c (`--shadow`), the photon's angular momentum sign and the
+emitter's time dilation (`--disc`), the corona's g⁴ (`--ring`), the table's row for an
+escaping b and b u_end read back wrong (`--einstein`), b u_end stored with the wrong b
+and the Over's clip at the coarsest mip (`--approach`), the white hole's frame lit from
+its start (`--plunge`), the twisted streaks' fade (`--chord`), the camera's trapezoids
+(`--clock`), entry's rate, the steps off both rests and the Fader's wrap
+(`--journey`), the orbit equation's 3u² (`--geodesic`), ȳ's peak (`--planck`).
 
 ## What is verified and what is assumed
 
 Verified, on this Mac (M4 Max, macOS 26) and its software renderer: everything in the
 README's Status table. Assumed, and not checked by anything:
 
-- that Resolume loads it (oxbow does);
-- that Windows builds it (the workflow is tinsel's lineage and has never run);
+- that Resolume on macOS loads it (oxbow does; on Windows the fleet's Arena gate loads
+  both in Arena 7.27.1 on win-lab, under Mesa llvmpipe, and checks their parameters and
+  that each control moves the picture);
 - that the films look like this. The looks were judged by eye on harness renders, not
-  against footage.
+  against footage;
+- that the sky's seams are gone: judged by eye on a render at Field of View 120°.
 - Wyman et al.'s CIE fit is half the tabulated x̄ at 700 nm; 2000 K comes out 0.0031 from
   the locus in uv. Close enough for stars and a disc, not for a lamp.
 
 ## Not done, and open questions
 
-- Never loaded into Resolume; never built for Windows; no GPU but this Mac's.
+- Never loaded into Resolume on macOS; on Windows only by the fleet's gate; no GPU but this
+  Mac's and llvmpipe.
+- **The Wormhole's clouds boil at the edges in transit.** Near the frame's edges the clouds
+  are close and run past about two noise cells a frame at the default Top Speed, more than
+  any shutter blurs: consecutive frames there are different pictures (correlation about 0,
+  against 0.4 in the middle). A tenth of Top Speed steadies them. Fading the domain warp
+  with the run was tried and changed nothing measurable; the cure is noise whose features
+  grow with their speed past the camera, not done.
+- With Tunnel up and a short shutter or a low Top Speed, the tunnel's noise aliases into
+  fine rings and spokes at the vanishing point.
 - No beat sync. A jump on the beat is a Jump press mapped to a beat in Resolume; a Sync
   option (Entry and Exit in beats from the host tempo) is the obvious next control.
 - No audio input.
 - Kerr: a spinning hole (the shadow's flat side, frame dragging) is the obvious upgrade to
   the black hole, at the cost of 3D tables.
 - The plunge and the white hole are cheats; nothing below d = 3.05 is physics.
-- Stars at a cube face's edge in the black hole's sky can be cut at the seam.
-- No OpenFX port, no browser demo, no user guide, no presets, no video.
+- No OpenFX port, no presets.

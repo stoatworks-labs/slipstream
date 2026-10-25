@@ -38,7 +38,6 @@ Half halfOf( double J )
 		return { false, 2.0 * j };
 	return { true, 2.0 * j - 1.0 };
 }
-constexpr double kHoleFar = 1.0e5;///< where a hole comes in from, GM/c^2
 constexpr double kPlunge  = 3.05; ///< the deepest the plunge goes (the photon sphere is 3)
 } // namespace
 
@@ -123,13 +122,16 @@ Pose PoseAt( Look look, double J, const ScriptSettings& settings )
 			pose.speed    = 1.0;
 			const double grow = smoothstep( 0.15, 0.5, h.t );
 			pose.endLight = 2.0 * grow * grow * grow;
+			pose.endGlow  = 1.0;
 		}
 		else
 		{
 			//Through: the white-out flashes at 0.5 and the scene unwinds
-			//out of it.
-			pose.twist = 1.0 - smoothstep( 0.5, 1.0, h.t );
-			pose.speed = 1.0 - smoothstep( 0.5, 0.8, h.t );
+			//out of it as it fades (Flash 0 included: no cut from white).
+			pose.twist    = 1.0 - smoothstep( 0.5, 1.0, h.t );
+			pose.speed    = 1.0 - smoothstep( 0.5, 0.8, h.t );
+			pose.endLight = 2.0;
+			pose.endGlow  = 1.0 - smoothstep( 0.5, 0.7, h.t );
 		}
 		break;
 
@@ -141,7 +143,8 @@ Pose PoseAt( Look look, double J, const ScriptSettings& settings )
 			if( J - std::floor( J ) > 0.0 )
 			{
 				const double s = smoothstep( 0.0, 1.0, h.t );
-				pose.holeD     = std::exp( std::log( kHoleFar ) + ( std::log( hold ) - std::log( kHoleFar ) ) * s );
+				const double from = std::max( kHoleFar, hold );
+				pose.holeD     = std::exp( std::log( from ) + ( std::log( hold ) - std::log( from ) ) * s );
 				pose.disc      = smoothstep( 0.3, 0.9, h.t );
 			}
 		}
@@ -229,10 +232,18 @@ void Journey::Advance( double dt, const DriveInputs& in )
 {
 	if( in.drive == Drive::Fader )
 	{
-		//Scrubbing: J is the fader, wherever it was.
+		//Scrubbing: J is the fader, and J is circular (1 is 0, normal space).
+		//Forward is taken as it comes; so is back, up to half a trip. A fader
+		//that jumps back further has gone round, not back: a looping ramp's
+		//wrap from 0.99 to 0 flies a hundredth forward, where taken literally
+		//it flew the whole trip backwards in one frame, both flashes and all.
+		const double target = std::clamp( in.fader, 0.0, 1.0 );
+		double delta        = target - phase;
+		if( delta < -0.5 )
+			delta += 1.0;
 		start     = lastFader ? end : phase;
-		end       = std::clamp( in.fader, 0.0, 1.0 );
-		phase     = end >= 1.0 ? 0.0 : end;
+		end       = start + delta;
+		phase     = target >= 1.0 ? 0.0 : target;
 		lastFader = true;
 		return;
 	}
@@ -285,6 +296,12 @@ void Journey::Advance( double dt, const DriveInputs& in )
 			remaining -= step / rateIn;
 			if( j >= 0.5 )
 				j = 0.5;
+			//A cruise that runs out on the frame's own boundary leaves no time
+			//to step with: J would stay on the rest with its timer reset, and
+			//wait a whole Cruise Time again, landing on the same boundary every
+			//time (Cruise Time 2 s at 60 fps). Off the rest is off it.
+			if( j <= 0.0 )
+				j = std::nextafter( 0.0, 1.0 );
 		}
 		else if( j < 0.5 )
 		{

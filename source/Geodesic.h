@@ -40,14 +40,21 @@ constexpr int kB = 512;   ///< b samples per branch
 constexpr int kT = 512;   ///< phi_in samples over t
 constexpr int kS = 512;   ///< u samples over s
 constexpr double kLogMin = -14.0;///< ln| b - b_c | at the edge of the photon ring
-constexpr double kEscapeLogMax = 10.0;///< ln( b - b_c ) at the far end: b ~ 22000
+/// ln( b - b_c ) at the far end: b ~ 270,000, past every ray a camera at the
+/// journey's farthest (Flight.h's kHoleFar, 1e5) can cast. 10 (b ~ 22,000)
+/// left the edge of the frame's rays clamped to the last row through the
+/// first half second of an approach, smearing the sky.
+constexpr double kEscapeLogMax = 12.5;
 
 struct Tables
 {
 	/// Row-major [ b ][ j ]: R = phi_in( t_j ), G = u( s_j ) / u_end, for the
 	/// escape branch; B, A the same for the capture branch. t_j = s_j = j / ( kT - 1 ).
 	std::vector< float > orbits;///< kB x kT x 4
-	/// Per b: R = u_end, G = phi_end (escape); B = u_end (1/2), A = phi_end (capture).
+	/// Per b: R = b u_end, G = phi_end (escape); B = u_end (1/2), A = phi_end (capture).
+	/// b u_end, not u_end: u_end falls as 1/b over rows evenly spaced in
+	/// ln( b - b_c ), and read linearly between them it was 3e-4 out, half a
+	/// pixel of the clip far from the hole; b u_end runs smoothly to 1.
 	std::vector< float > ends;  ///< kB x 4
 
 	/// The same in double, for the harness.

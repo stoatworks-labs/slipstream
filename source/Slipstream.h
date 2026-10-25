@@ -92,6 +92,23 @@ public:
 	{
 		copyLaw = copies;
 	}
+	/// --approach's negative control: the end table's u_end stored and read
+	/// as itself, not as b u_end. Before InitGL, which uploads the table.
+	void SetEndsLawForTest( bool scaled )
+	{
+		endsLaw = scaled;
+	}
+	/// --plunge's negative control: the white hole's crossing frame from the
+	/// pose at shutter close alone.
+	void SetWhiteHoleLawForTest( bool share )
+	{
+		whiteHoleLaw = share;
+	}
+	/// --chord's negative control: the Wormhole's twisted streaks drawn whole.
+	void SetChordLawForTest( bool fade )
+	{
+		chordLaw = fade;
+	}
 	/// --energy's negative control: a streak's light not spread over its length.
 	void SetLengthLawForTest( bool spread )
 	{
@@ -227,6 +244,7 @@ private:
 	double shutterZ = 0.0, focal = 0.0, flashLight = 0.0, holeD = 0.0, discLight = 0.0, coronaLight = 0.0;
 
 	bool fluxLaw = true, copyLaw = true, lengthLaw = true, roundTrip = true, bendLaw = true, captureLaw = true;
+	bool chordLaw = true, whiteHoleLaw = true, endsLaw = true;
 	bool discTexture = true, seamForTest = false;
 	float testStar[ 4 ] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float spinSign         = 1.0f;

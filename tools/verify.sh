@@ -198,7 +198,7 @@ check_bundle "$BUILD/Slipstream Over.bundle" "Slipstream Over" "com.stoatworks.f
 step "Checks (this Mac's GPU, 1280x720 and 320x180)"
 #---------------------------------------------------------------------------
 # Every claim the README makes, in the order the README makes them.
-CHECKS="streak energy copies identity smear clock shadow einstein disc ring seam resize state"
+CHECKS="streak energy copies identity smear clock shadow einstein disc ring approach chord plunge seam resize state"
 for check in journey geodesic planck names cues $CHECKS; do
 	if out=$( "$SLIPTEST" --$check 2>&1 ); then
 		printf '   ok   sliptest --%s: %s\n' "$check" "$( printf '%s\n' "$out" | grep -c '^  ok' ) checks"
@@ -213,10 +213,11 @@ step "Software renderer (CI's, at 320x180)"
 #---------------------------------------------------------------------------
 # The same checks on Apple's software renderer, which is what a GPU-less CI
 # runner falls back to, and where a check that only holds on this GPU is
-# found before CI finds it. All but the slowest two (copies and disc each
-# render a hundred thousand fragments a star or a ray a pixel; they run here
-# at 320x180 on the GPU above).
-SOFTWARE="streak energy identity smear clock shadow einstein ring seam resize state"
+# found before CI finds it. All but the slowest three (copies and disc each
+# render a hundred thousand fragments a star or a ray a pixel, and chord fifty
+# frames at 1280x720; they run on the GPU above) and approach, which asks for
+# a hundredth of a pixel and Apple's software sin and cos do not give it.
+SOFTWARE="streak energy identity smear clock shadow einstein ring plunge seam resize state"
 for check in $SOFTWARE; do
 	if out=$( SLIPTEST_RENDERER=software "$SLIPTEST" --$check --size 320x180 2>&1 ); then
 		printf '   ok   sliptest --%s (software): %s checks\n' "$check" "$( printf '%s\n' "$out" | grep -c '^  ok' )"

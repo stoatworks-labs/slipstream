@@ -27,6 +27,9 @@ struct Perturb
 	bool seam             = false;///< --seam: the clouds' lattice one cell short (plugin)
 	bool resizeLate       = false;///< --resize: compare with a run one frame on (harness)
 	bool cuesRamp         = false;///< --cues: ramp every control (harness)
+	bool rawEnds          = false;///< --approach: the end table's u_end as itself, not b u_end (plugin)
+	bool wholeChords      = false;///< --chord: the Wormhole's twisted streaks drawn whole (plugin)
+	bool plainWhiteHole   = false;///< --plunge: the white hole's frame from the pose at shutter close (plugin)
 };
 
 using CheckFn = int ( * )( const Perturb& );
@@ -366,7 +369,8 @@ int runCopies( const Perturb& perturb )
 //===========================================================================
 int runIdentity( const Perturb& perturb )
 {
-	std::printf( "\n=== identity: the Over at rest returns the clip to the bit (sRGB -> exposure -> film -> sRGB)\n" );
+	std::printf( "\n=== identity: the Over at rest, at the default Cruise Speed with Stars 0, returns the clip to the bit (sRGB -> exposure -> "
+	             "film -> sRGB)\n" );
 	for( const Raster& raster : kRasters )
 		for( int look = 0; look < static_cast< int >( Look::Count ); ++look )
 		{
@@ -378,7 +382,6 @@ int runIdentity( const Perturb& perturb )
 			rig.Set( PT_LOOK, static_cast< float >( look ) );
 			rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
 			rig.Set( PT_JOURNEY, 0.0f );
-			rig.Set( PT_CRUISE_SPEED, 0.0f );
 			rig.Set( PT_STARS, 0.0f );
 			if( !rig.Render( 3 ) )
 				return 1;
@@ -394,6 +397,49 @@ int runIdentity( const Perturb& perturb )
 			Check( worst == 0, fmt( "%dx%d, %s: %d of %zu channels differ, by at most %d in 255", raster.w, raster.h,
 			                        LookName( static_cast< Look >( look ) ), off, out.size(), worst ) );
 		}
+	//A hair into a jump to hyperspace the smear is a tenth of a pixel long
+	//at the frame's corners, and keeps the clip's edges: its gradient energy
+	//(squared: a blur leaves an edge's summed slope alone) 80% of the clip's
+	//at least, where the old floor kept 40%. (Its mip level once had a floor of half a step,
+	//a pixel's blur whatever the smear, which softened the clip from the
+	//first frame of every jump. Even a hundredth of a pixel's smear moves a
+	//hard edge by levels, since the clip is averaged in exposure, so this is
+	//a measure of sharpness and not of equality.)
+	for( const Raster& raster : kRasters )
+	{
+		Rig rig( true );
+		const Floats card = buildCard( raster.w, raster.h );
+		if( !rig.Init( raster.w, raster.h, &card ) )
+			return 1;
+		rig.plugin.SetRoundTripForTest( !perturb.noRoundTrip );
+		rig.Set( PT_LOOK, static_cast< float >( Look::Hyperspace ) );
+		rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
+		rig.Set( PT_JOURNEY, 0.051f );
+		rig.Set( PT_CRUISE_SPEED, 0.0f );
+		rig.Set( PT_STARS, 0.0f );
+		if( !rig.Render( 3 ) )
+			return 1;
+		const double k      = 1.0 + rig.plugin.LastShutterZ() / ( ClipDepthFromParam( rig.plugin.GetFloatParameter( PT_CLIP_DEPTH ) ) * kDepth );
+		const double corner = 0.5 * std::hypot( raster.w, raster.h ) * ( k - 1.0 );
+		const Floats out    = rig.Output();
+		auto gradients      = [ & ]( const Floats& picture ) {
+			double sum = 0.0;
+			for( int j = 0; j + 1 < raster.h; ++j )
+				for( int i = 0; i + 1 < raster.w; ++i )
+					for( int c = 0; c < 3; ++c )
+					{
+						const size_t at = ( static_cast< size_t >( j ) * raster.w + i ) * 4 + c;
+						const double dx = picture[ at + 4 ] - picture[ at ], dy = picture[ at + 4 * raster.w ] - picture[ at ];
+					sum += dx * dx + dy * dy;
+					}
+			return sum;
+		};
+		const double kept = gradients( out ) / gradients( card );
+		Check( k > 1.0 + 1e-6 && corner < 0.1 && kept > 0.8,
+		       fmt( "%dx%d, Hyperspace at J 0.051: k - 1 = %.1e, a smear of %.3f px at the corners; the clip's gradient energy %.1f%% of its own "
+		            "(80%%)",
+		            raster.w, raster.h, k - 1.0, corner, 100.0 * kept ) );
+	}
 	return Verdict();
 }
 
@@ -406,7 +452,8 @@ int runIdentity( const Perturb& perturb )
 // light per unit length across the line, A / ( ( k - 1 ) r0 ), the same
 // all along, and A / k in all. (The picture keeps its surface brightness and
 // was smaller while it was further off: its light is not conserved, a
-// star's is.)
+// star's is.) Driven by a jump: the clip cruises with the camera, so Cruise
+// Speed smears nothing, and that is checked too.
 //===========================================================================
 int runSmear( const Perturb& perturb )
 {
@@ -428,16 +475,22 @@ int runSmear( const Perturb& perturb )
 		Rig rig( true );
 		if( !rig.Init( w, h, &card ) )
 			return 1;
+		//In transit at a tenth of Top Speed, 1.2 units a shutter: k = 2.7 at
+		//0.18 D. No cruise, no tunnel, the clip at its full share.
+		const float depth = ParamFromClipDepth( 0.18 );
 		rig.Set( PT_LOOK, static_cast< float >( Look::Hyperspace ) );
 		rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
-		rig.Set( PT_JOURNEY, 0.0f );
-		rig.Set( PT_CRUISE_SPEED, 1.0f );
-		rig.Set( PT_CLIP_DEPTH, 0.0f );
+		rig.Set( PT_JOURNEY, 0.5f );
+		rig.Set( PT_TOP_SPEED, 0.0f );
+		rig.Set( PT_CRUISE_SPEED, 0.0f );
+		rig.Set( PT_TUNNEL, 0.0f );
+		rig.Set( PT_CLIP_THROUGH, 1.0f );
+		rig.Set( PT_CLIP_DEPTH, depth );
 		rig.Set( PT_SHUTTER, 1.0f );
 		rig.Set( PT_STARS, 0.0f );
 		if( !rig.Render( 4 ) )
 			return 1;
-		const double k     = 1.0 + rig.plugin.LastShutterZ() / ( ClipDepthFromParam( 0.0f ) * kDepth );
+		const double k     = 1.0 + rig.plugin.LastShutterZ() / ( ClipDepthFromParam( depth ) * kDepth );
 		const Floats scene = rig.SceneExposure();
 		const double vx = 0.5 * w, vy = 0.5 * h;
 		const double px = cx + 0.5 - vx, py = cy + 0.5 - vy, r0 = std::hypot( px, py );
@@ -500,6 +553,31 @@ int runSmear( const Perturb& perturb )
 		Check( innerBins >= 2 && outerBins >= 2 && std::fabs( innerLevel / outerLevel - 1.0 ) < 0.05,
 		       fmt( "evenly lit along it: the inner half's level over the outer half's %.3f (%d and %d bins) (5%%)", innerLevel / outerLevel,
 		            innerBins, outerBins ) );
+
+		//Cruising at the top of Cruise Speed, the nearest Clip Depth (k would
+		//be 2.7 if cruising counted): the dot stays a dot.
+		Rig still( true );
+		if( !still.Init( w, h, &card ) )
+			return 1;
+		still.Set( PT_LOOK, static_cast< float >( Look::Hyperspace ) );
+		still.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
+		still.Set( PT_JOURNEY, 0.0f );
+		still.Set( PT_CRUISE_SPEED, 1.0f );
+		still.Set( PT_CLIP_DEPTH, 0.0f );
+		still.Set( PT_SHUTTER, 1.0f );
+		still.Set( PT_STARS, 0.0f );
+		if( !still.Render( 4 ) )
+			return 1;
+		const Floats rest = still.SceneExposure();
+		double onDot = 0.0, away = 0.0;
+		for( int j = 0; j < h; ++j )
+			for( int i = 0; i < w; ++i )
+			{
+				const double light = luminance( &rest[ ( static_cast< size_t >( j ) * w + i ) * 4 ] );
+				( std::abs( i - cx ) <= 2 && std::abs( j - cy ) <= 2 ? onDot : away ) += light;
+			}
+		Check( away <= 1e-4 * onDot, fmt( "cruising at %.1f D/s, shutter fully open: %.2g of the dot's light outside it (1e-4)",
+		                                  CruiseFromParam( 1.0f ), away / std::max( onDot, 1e-30 ) ) );
 	}
 	return Verdict();
 }
@@ -659,6 +737,49 @@ int runJourney( const Perturb& perturb )
 		       fmt( "Trip, %d Transit Times of whole frames at 60, 50 and 30 fps: %d never came back; the rest within %.3f s of "
 		            "Entry + Transit + Exit", tried, stuck, worstLate ) );
 	}
+	//Loop over every Cruise Time the slider gives (1001 positions) at 60, 50
+	//and 30 fps on a host's clock: three departures, each a cruise after the
+	//trip before. A cruise that ran out on a frame's boundary once left J on
+	//the rest with its timer reset, for ever (Cruise Time 2 s at 60 fps).
+	{
+		int stalled = 0, tried = 0;
+		double worst = 0.0;
+		for( double fps : { 60.0, 50.0, 30.0 } )
+			for( int p = 0; p <= 1000; ++p )
+			{
+				Journey j;
+				DriveInputs loop = in;
+				loop.drive       = Drive::Loop;
+				loop.entry = loop.transit = loop.exit = 0.25;
+				loop.cruise      = SecondsFromParam( p / 1000.0f );
+				const double period = loop.cruise + 0.75;
+				std::vector< int > departures;
+				double last     = 0.0;
+				const int limit = static_cast< int >( ( 3.0 * period + 1.0 ) * fps );
+				for( int f = 0; f < limit && departures.size() < 3; ++f )
+				{
+					j.Advance( ( f + 1 ) / fps - f / fps, loop );
+					forward = forward && j.End() >= j.Start();
+					if( last == 0.0 && j.Phase() != 0.0 )
+						departures.push_back( f );
+					last = j.Phase();
+				}
+				++tried;
+				if( departures.size() < 3 )
+				{
+					++stalled;
+					continue;
+				}
+				//Leaving in frame f is leaving within it: the cruise ran out by
+				//its end, and not by its start.
+				worst = std::max( worst, std::fabs( ( departures[ 0 ] + 0.5 ) / fps - loop.cruise ) * fps );
+				for( int d = 1; d < 3; ++d )
+					worst = std::max( worst, std::fabs( ( departures[ d ] - departures[ d - 1 ] ) / fps - period ) * fps );
+			}
+		Check( stalled == 0 && worst <= 1.0 + 1e-6,
+		       fmt( "Loop, %d Cruise Times at 60, 50 and 30 fps: %d never left the rest; the rest left within %.2f frames of each cruise's "
+		            "end (1)", tried, stalled, worst ) );
+	}
 	Check( forward, "Hold, Trip and Loop never moved J backwards" );
 	//Fader: J is the fader, both ways.
 	{
@@ -672,6 +793,35 @@ int runJourney( const Perturb& perturb )
 			ok = ok && std::fabs( j.Phase() - ( v >= 1.0 ? 0.0 : v ) ) < 1e-12;
 		}
 		Check( ok, "Fader: J follows Journey, forwards and back (1 is normal space again)" );
+	}
+	//Fader: J is circular. Forward is taken as it comes, back up to half a
+	//trip; a jump back further has gone round, so a looping ramp's wrap from
+	//0.99 to 0 flies a hundredth forward (taken literally, it flew the whole
+	//trip backwards in one frame, both flashes and all).
+	{
+		Journey j;
+		in.drive = Drive::Fader;
+		const double journeys[] = { 0.0, 0.3, 0.7, 0.4, 0.85, 1.0, 0.0, 0.05, 0.95, 0.25, 0.75, 0.25 };
+		const double flown[]    = { 0.0, 0.3, 0.4, -0.3, 0.45, 0.15, 0.0, 0.05, 0.9, 0.3, 0.5, -0.5 };
+		double worst = 0.0;
+		for( size_t i = 0; i < sizeof( journeys ) / sizeof( journeys[ 0 ] ); ++i )
+		{
+			in.fader = journeys[ i ];
+			j.Advance( dt, in );
+			worst = std::max( worst, std::fabs( j.End() - j.Start() - flown[ i ] ) );
+		}
+		double longest = 0.0;
+		in.fader       = 0.0;
+		j.Advance( dt, in );
+		for( int f = 1; f < 300; ++f )
+		{
+			in.fader = ( f % 100 ) / 100.0;
+			j.Advance( dt, in );
+			longest = std::max( longest, std::fabs( j.End() - j.Start() ) );
+		}
+		Check( worst < 1e-12 && longest < 0.01 + 1e-12,
+		       fmt( "Fader, round and not back: each frame's flight within %.1e of it; a ramp 0 to 0.99 looping three times flew at most %.4f "
+		            "a frame (its own step 0.01)", worst, longest ) );
 	}
 	return Verdict();
 }
@@ -771,6 +921,16 @@ int runGeodesic( const Perturb& perturb )
 	Check( worstEscape < 1e-5 && worstCapture < 1e-5,
 	       fmt( "14 rows a branch, RK4 in phi against quadrature of dphi = du / sqrt( F ): worst %.1e (escape), %.1e (capture) rad (1e-5)",
 	            worstEscape, worstCapture ) );
+	//The table reaches every ray of the approach: a static observer at d
+	//sees impact parameters up to d / sqrt( 1 - 2 / d ), and the approach
+	//starts at kHoleFar. (A table that stopped at b = 22,000 read its last
+	//row for every ray past it: a black frame with radial streaks.)
+	{
+		const double bMax = kHoleFar / std::sqrt( 1.0 - 2.0 / kHoleFar );
+		Check( bMax <= geodesic::EscapeB( geodesic::kB - 1 ),
+		       fmt( "the approach from %.0f GM/c^2 casts b up to %.0f; the escape table reaches %.0f", kHoleFar, bMax,
+		            geodesic::EscapeB( geodesic::kB - 1 ) ) );
+	}
 	//The critical impact parameter.
 	{
 		double phiA, uA, phiB, uB;
@@ -1252,6 +1412,228 @@ int runSeam( const Perturb& perturb )
 }
 
 //===========================================================================
+// --approach: the Black Hole comes in from 100,000 GM/c^2 off, where it bends
+// almost nothing: beyond the few pixels where the bending reaches a tenth
+// of a pixel, the Over gives back the clip. (The orbit table once stopped at
+// b = 22,000 and held u_end itself: every ray past it read the last row's
+// u_end, and the approach's first half second was a black frame streaked
+// with radial lines. With u_end read linearly between rows the clip still
+// sat half a pixel out. GPU only: Apple's software renderer's sin and cos
+// put a ray a hundredth of a pixel out, which moves the card's hard edges by
+// three levels on average.)
+//===========================================================================
+int runApproach( const Perturb& perturb )
+{
+	std::printf( "\n=== approach: the Black Hole's first frames, at the widest Field of View, against the clip it barely bends\n" );
+	for( const Raster& raster : kRasters )
+		for( double journey : { 0.005, 0.06 } )
+		{
+			const int w = raster.w, h = raster.h;
+			Rig rig( true );
+			const Floats card = buildCard( w, h );
+			rig.plugin.SetEndsLawForTest( !perturb.rawEnds );
+			if( !rig.Init( w, h, &card ) )
+				return 1;
+			rig.Set( PT_LOOK, static_cast< float >( Look::BlackHole ) );
+			rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
+			rig.Set( PT_JOURNEY, static_cast< float >( journey ) );
+			rig.Set( PT_FIELD_OF_VIEW, 1.0f );
+			rig.Set( PT_STARS, 0.0f );
+			rig.Set( PT_DISC, 0.0f );
+			rig.Set( PT_CORONA, 0.0f );
+			if( !rig.Render( 3 ) )
+				return 1;
+			const double d = rig.plugin.HoleDistance(), f = rig.plugin.LastFocal();
+			const Floats out = rig.Output();
+			//The bending alpha off the hole: 4 / b radians, b = d sin alpha /
+			//sqrt( 1 - 2 / d ), drawn f / cos^2 alpha pixels a radian.
+			double sum = 0.0;
+			int compared = 0, worst = 0, excluded = 0;
+			for( int j = 0; j < h; ++j )
+				for( int i = 0; i < w; ++i )
+				{
+					const double x = i + 0.5 - 0.5 * w, y = j + 0.5 - 0.5 * h, r = std::hypot( x, y );
+					const double alpha = std::atan( r / f ), c = std::cos( alpha );
+					const double bend  = 4.0 * std::sqrt( 1.0 - 2.0 / d ) / ( d * std::max( std::sin( alpha ), 1e-12 ) ) * f / ( c * c );
+					if( bend > 0.1 )
+					{
+						++excluded;
+						continue;
+					}
+					for( int k = 0; k < 3; ++k )
+					{
+						const size_t at = ( static_cast< size_t >( j ) * w + i ) * 4 + k;
+						const int a = static_cast< int >( std::lround( std::clamp( out[ at ], 0.0f, 1.0f ) * 255.0f ) );
+						const int b = static_cast< int >( std::lround( card[ at ] * 255.0f ) );
+						sum += std::abs( a - b );
+						worst = std::max( worst, std::abs( a - b ) );
+						++compared;
+					}
+				}
+			//Even a hundredth of a pixel's bending moves a hard edge of the card
+			//by levels (the clip is read in exposure, where a lit window is 60
+			//times its dark wall), so the bound is on the mean: 1 level. The
+			//table's u_end read linearly between rows, half a pixel out, made
+			//1.5 to 2.9; the clamped table, tens.
+			const double mean = compared ? sum / compared : 1e9, share = static_cast< double >( excluded ) / ( w * h );
+			Check( share < 0.25 && mean < 1.0,
+			       fmt( "%dx%d, J %.3f: the hole %.0f GM/c^2 off; where it bends light under a tenth of a pixel (all but %.2f%% of the "
+			            "frame) the Over is the clip to %.3f levels in 255 on average (worst %d) (1)", w, h, journey, d, 100.0 * share, mean,
+			            worst ) );
+		}
+	return Verdict();
+}
+
+//===========================================================================
+// --chord: the Wormhole's whirlpool turns each end of a streak by its own
+// angle, and a streak is drawn as the straight chord between its ends. One
+// whose ends it turns far apart is nowhere near its chord (a straight line
+// across the frame), so it fades: gone by 0.75 rad apart, whole under 0.25.
+// Test stars over the whirlpool at the exit (twist and speed both high),
+// against the same stars with the fade off; each star's turn computed here,
+// in double, from the pose and the controls.
+//===========================================================================
+int runChord( const Perturb& perturb )
+{
+	std::printf( "\n=== chord: the Wormhole's streaks whose ends the whirlpool turns apart fade; the rest are whole\n" );
+	const int w = 1280, h = 720;
+	constexpr double J = 0.76;
+	struct Shot
+	{
+		double light, turn;
+	};
+	auto shoot = [ & ]( bool fade, std::vector< Shot >& shots ) -> bool {
+		Rig rig( false );
+		if( !rig.Init( w, h ) )
+			return false;
+		rig.plugin.SetChordLawForTest( fade );
+		rig.Set( PT_LOOK, static_cast< float >( Look::Wormhole ) );
+		rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
+		rig.Set( PT_JOURNEY, static_cast< float >( J ) );
+		rig.Set( PT_CRUISE_SPEED, 0.0f );
+		rig.Set( PT_FLASH, 0.0f );
+		rig.plugin.SetTestStarForTest( 0.5, 0.5, 1.0, 50.0 );
+		if( !rig.Render( 4 ) )
+			return false;
+		const Pose pose     = PoseAt( Look::Wormhole, J, ScriptSettings() );
+		const double twist  = pose.twist * SwirlTurnsFromParam( rig.plugin.GetFloatParameter( PT_SWIRL ) ) * 2.0 * kPi;
+		const double swirl  = 0.25 * h;
+		const double speed  = TopFromParam( rig.plugin.GetFloatParameter( PT_TOP_SPEED ) ) * TransitSpeed( Look::Wormhole ) * kDepth * pose.speed;
+		for( double rho : { 0.03, 0.1, 0.25, 0.5, 0.9, 1.5 } )
+			for( double zcTarget : { 0.2, 0.6, 1.5, 2.5 } )
+			{
+				const double x = 0.8 * rho, y = 0.6 * rho;
+				double z0 = std::fmod( std::fmod( rig.plugin.CameraState().PhaseZ() + speed / rig.fps, kDepth ) + zcTarget, kDepth );
+				if( z0 < 0.0 )
+					z0 += kDepth;
+				rig.plugin.SetTestStarForTest( x, y, z0, 50.0 );
+				if( !rig.Render( 1 ) )
+					return false;
+				const double phase = rig.plugin.CameraState().PhaseZ();
+				const double zc    = kNear + std::fmod( std::fmod( z0 - phase - kNear, kDepth ) + kDepth, kDepth );
+				const double dz = rig.plugin.LastShutterZ(), focal = rig.plugin.LastFocal();
+				const double rIn = focal * rho / std::min( zc + dz, kNear + kDepth ), rOut = focal * rho / zc;
+				const double qIn = rIn / swirl, qOut = rOut / swirl;
+				const Floats e   = rig.StarExposure();
+				double light     = 0.0;
+				for( size_t i = 0; i < e.size(); i += 4 )
+					light += luminance( &e[ i ] );
+				shots.push_back( { light, std::fabs( twist / ( 1.0 + qIn * qIn ) - twist / ( 1.0 + qOut * qOut ) ) } );
+			}
+		return true;
+	};
+	std::vector< Shot > faded, whole;
+	if( !shoot( !perturb.wholeChords, faded ) || !shoot( false, whole ) )
+		return 1;
+	int gone = 0, goneTried = 0, kept = 0, keptTried = 0;
+	double worstGone = 0.0, worstKept = 0.0;
+	for( size_t i = 0; i < faded.size(); ++i )
+	{
+		if( whole[ i ].light < 1e-3 )
+			continue;//off the frame
+		const double share = faded[ i ].light / whole[ i ].light;
+		if( faded[ i ].turn > 0.8 )
+		{
+			++goneTried;
+			gone += share < 1e-6;
+			worstGone = std::max( worstGone, share );
+		}
+		else if( faded[ i ].turn < 0.2 )
+		{
+			++keptTried;
+			kept += std::fabs( share - 1.0 ) < 1e-6;
+			worstKept = std::max( worstKept, std::fabs( share - 1.0 ) );
+		}
+	}
+	Check( goneTried >= 3 && gone == goneTried,
+	       fmt( "%d of %d streaks whose ends turn over 0.8 rad apart are gone (the most left: %.2g of its light)", gone, goneTried, worstGone ) );
+	Check( keptTried >= 3 && kept == keptTried,
+	       fmt( "%d of %d streaks whose ends turn under 0.2 rad apart are whole (worst %.1e)", kept, keptTried, worstKept ) );
+	return Verdict();
+}
+
+//===========================================================================
+// --plunge: out through the white hole. A frame whose shutter crosses it
+// late is black until the crossing and lit after: dark, never the plain
+// space of the pose at shutter close (which put a frame of plain space
+// between the blackout and the flash, when the crossing came at the end of
+// a frame).
+//===========================================================================
+int runPlunge( const Perturb& perturb )
+{
+	std::printf( "\n=== plunge: the frame that crosses the white hole at the end of its shutter, Flash 0\n" );
+	for( const Raster& raster : kRasters )
+	{
+		//In linear light (the output is sRGB), pixel by pixel where plain
+		//space is lit: the dark sky is all eight-bit rounding.
+		auto lightOf = []( const Floats& out ) {
+			auto linear = []( double c ) { return c <= 0.04045 ? c / 12.92 : std::pow( ( c + 0.055 ) / 1.055, 2.4 ); };
+			std::vector< double > light( out.size() / 4 );
+			for( size_t i = 0; i < light.size(); ++i )
+				light[ i ] = ( linear( out[ i * 4 ] ) + linear( out[ i * 4 + 1 ] ) + linear( out[ i * 4 + 2 ] ) ) / 3.0;
+			return light;
+		};
+		auto rigAt = [ & ]( Rig& rig ) {
+			if( !rig.Init( raster.w, raster.h ) )
+				return false;
+			rig.plugin.SetWhiteHoleLawForTest( !perturb.plainWhiteHole );
+			rig.Set( PT_LOOK, static_cast< float >( Look::BlackHole ) );
+			rig.Set( PT_DRIVE, static_cast< float >( Drive::Fader ) );
+			rig.Set( PT_FLASH, 0.0f );
+			return true;
+		};
+		//J 0.79 to 0.8001 in one frame: the white hole at 0.8 crossed 99% of
+		//the way through it, the shutter open over its second half.
+		Rig rig;
+		if( !rigAt( rig ) )
+			return 1;
+		rig.Set( PT_JOURNEY, 0.79f );
+		if( !rig.Render( 3 ) )
+			return 1;
+		rig.Set( PT_JOURNEY, 0.8001f );
+		if( !rig.Render( 1 ) )
+			return 1;
+		const std::vector< double > crossing = lightOf( rig.Output() );
+		rig.Set( PT_JOURNEY, 0.82f );
+		if( !rig.Render( 1 ) )
+			return 1;
+		const std::vector< double > plain = lightOf( rig.Output() );
+		std::vector< double > ratio;
+		for( size_t i = 0; i < plain.size(); ++i )
+			if( plain[ i ] > 0.05 )
+				ratio.push_back( crossing[ i ] / plain[ i ] );
+		std::sort( ratio.begin(), ratio.end() );
+		const double median = ratio.empty() ? 1.0 : ratio[ ratio.size() / 2 ];
+		//The shutter open over the frame's second half, the crossing 99% of
+		//the way through: black for 98% of it, the pose there 0.99 dark.
+		Check( ratio.size() >= 20 && median < 0.1,
+		       fmt( "%dx%d: over the %zu pixels lit in plain space just after, the crossing frame holds a median %.3f of their light "
+		            "(a tenth; 0.03 expected)", raster.w, raster.h, ratio.size(), median ) );
+	}
+	return Verdict();
+}
+
+//===========================================================================
 // --resize: the flight carries on through a change of raster.
 //===========================================================================
 int runResize( const Perturb& perturb )
@@ -1448,6 +1830,9 @@ const std::vector< CheckEntry >& checks()
 		{ "einstein", runEinstein, false, "the Einstein ring of a point behind the hole" },
 		{ "disc", runDisc, false, "the disc's Doppler side and gravitational shift" },
 		{ "ring", runRing, false, "the corona along bent rays; the photon ring" },
+		{ "approach", runApproach, false, "the Black Hole's approach from far off" },
+		{ "chord", runChord, false, "the Wormhole's twisted streaks fade" },
+		{ "plunge", runPlunge, false, "the frame out through the white hole" },
 		{ "planck", runPlanck, true, "the blackbody colours on the Planckian locus" },
 		{ "seam", runSeam, false, "no seam at the branch cut" },
 		{ "resize", runResize, false, "the flight through a change of raster" },
@@ -1515,6 +1900,9 @@ int runNegative( bool offlineOnly = false )
 	add( "disc", runDisc, "the disc's spin flipped in its Doppler shift only", []( Perturb& p ) { p.spinFlipped = true; } );
 	add( "disc", runDisc, "expect no gravitational shift", []( Perturb& p ) { p.noGravityShift = true; } );
 	add( "ring", runRing, "straight rays through the corona", []( Perturb& p ) { p.straightRays = true; } );
+	add( "approach", runApproach, "the end table's u_end read linearly as itself, not as b u_end", []( Perturb& p ) { p.rawEnds = true; } );
+	add( "chord", runChord, "the Wormhole's twisted streaks drawn whole", []( Perturb& p ) { p.wholeChords = true; } );
+	add( "plunge", runPlunge, "the white hole's frame from the pose at shutter close", []( Perturb& p ) { p.plainWhiteHole = true; } );
 	add( "planck", runPlanck, "compare against the locus 20% hotter", []( Perturb& p ) { p.hotterLocus = true; } );
 	add( "seam", runSeam, "the clouds' lattice one cell short of closing round", []( Perturb& p ) { p.seam = true; } );
 	add( "resize", runResize, "compare with a run one frame on", []( Perturb& p ) { p.resizeLate = true; } );

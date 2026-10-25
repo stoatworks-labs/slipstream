@@ -278,7 +278,16 @@ void SlipstreamPlugin::uploadTables()
 	}
 	const geodesic::Tables& orbits = geodesic::Get();
 	makeTable( orbitTexture, geodesic::kT, geodesic::kB, orbits.orbits.data(), GL_NEAREST );
-	makeTable( endTexture, 1, geodesic::kB, orbits.ends.data(), GL_NEAREST );
+	if( endsLaw )
+		makeTable( endTexture, 1, geodesic::kB, orbits.ends.data(), GL_NEAREST );
+	else
+	{
+		//--approach's negative control: the table as it was, u_end itself.
+		std::vector< float > ends( orbits.ends );
+		for( int i = 0; i < geodesic::kB; ++i )
+			ends[ i * 4 ] = static_cast< float >( ends[ i * 4 ] / geodesic::EscapeB( i ) );
+		makeTable( endTexture, 1, geodesic::kB, ends.data(), GL_NEAREST );
+	}
 }
 
 bool SlipstreamPlugin::ensureClipBuffer( int width, int height )
@@ -425,6 +434,9 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 
 	const double shutter = ShutterFromParam( params[ PT_SHUTTER ] );
 	shutterZ             = std::max( 0.0, -camera.OffsetAt( 1.0 - shutter ) );
+	//The part of that run that is only Cruise Speed: the clip cruises with
+	//the camera, so this much of it smears nothing.
+	const double cruiseZ = CruiseFromParam( params[ PT_CRUISE_SPEED ] ) * kDepth * shutter * std::max( dt, 0.0 );
 	const Pose open      = PoseAt( look, j0 + ( j1 - j0 ) * ( 1.0 - shutter ), settings );
 	const Pose close     = PoseAt( look, j1, settings );
 	holeD                = look == Look::BlackHole ? close.holeD : 0.0;
@@ -434,6 +446,7 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 	// then an exponential decay, averaged over the open shutter in closed
 	// form (a flash that starts mid-shutter is a part of it).
 	//-------------------------------------------------------------------
+	double crossAt = -1.0;
 	{
 		bool crossed       = false;
 		double sinceCross  = 0.0;
@@ -456,6 +469,7 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 			{
 				crossed    = true;
 				sinceCross = ( 1.0 - at ) * dt;
+				crossAt    = at;
 			}
 		}
 		flashAge = crossed ? sinceCross : flashAge + dt;
@@ -472,7 +486,11 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 	}
 
 	//The whirlpool's spin and the disc's clock: phases kept small in double.
-	spinClock = std::fmod( spinClock + dt * ( 0.4 + 1.6 * close.speed ) * close.twist, 18.0 * kPi );
+	//Swirl sets the clouds' spin as well as the whirlpool's turn (the mouth
+	//covers the whirlpool in transit): its default, 3 turns, is the rate as
+	//it was.
+	const double spinRate = ( 0.4 + 1.6 * close.speed ) * close.twist * SwirlTurnsFromParam( params[ PT_SWIRL ] ) / 3.0;
+	spinClock             = std::fmod( spinClock + dt * spinRate, 18.0 * kPi );
 	discClock = std::fmod( discClock + dt * kDiscRate, kDiscPeriod );
 
 	//-------------------------------------------------------------------
@@ -557,6 +575,7 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		starShader.Set( "SwirlRadius", swirl );
 		starShader.Set( "Dispersion", look == Look::Warp ? std::clamp( params[ PT_DISPERSION ], 0.0f, 1.0f ) : 0.0f );
 		starShader.Set( "CopyLaw", copyLaw ? 1.0f : 0.0f );
+		starShader.Set( "ChordLaw", chordLaw ? 1.0f : 0.0f );
 		starShader.Set( "FluxLaw", fluxLaw ? 1.0f : 0.0f );
 		starShader.Set( "LengthLaw", lengthLaw ? 1.0f : 0.0f );
 		setAdditiveBlend();
@@ -582,6 +601,7 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		sceneShader.Set( "ClipE", 1 );
 		sceneShader.Set( "Orbits", 2 );
 		sceneShader.Set( "Ends", 3 );
+		sceneShader.Set( "EndsLaw", endsLaw ? 1.0f : 0.0f );
 		sceneShader.Set( "Blackbody", 4 );
 		sceneShader.Set( "LookId", static_cast< int >( look ) );
 		sceneShader.Set( "IsEffect", isEffect ? 1 : 0 );
@@ -595,10 +615,12 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		sceneShader.Set( "LightGain", static_cast< float >( exposure ) );
 		sceneShader.Set( "TintColour", tint[ 0 ], tint[ 1 ], tint[ 2 ] );
 
-		//Hyperspace: the clip's smear, k = 1 + dZ / Clip Depth, and its share
-		//fading to Clip Through as the tunnel comes up.
+		//Hyperspace: the clip's smear, k = 1 + dZ / Clip Depth with dZ the run
+		//beyond cruising, and its share fading to Clip Through as the tunnel
+		//comes up.
 		const double clipDepth = ClipDepthFromParam( params[ PT_CLIP_DEPTH ] );
-		sceneShader.Set( "SmearK", static_cast< float >( 1.0 + shutterZ / ( clipDepth * kDepth ) ) );
+		const double smearZ    = std::max( shutterZ - cruiseZ, 0.0 );
+		sceneShader.Set( "SmearK", static_cast< float >( 1.0 + smearZ / ( clipDepth * kDepth ) ) );
 		float clipShare = 1.0f;
 		if( look == Look::Hyperspace )
 			clipShare = static_cast< float >( 1.0 + ( through - 1.0 ) * close.tunnel );
@@ -624,6 +646,11 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		sceneShader.Set( "Twist1", twist1 );
 		sceneShader.Set( "MouthRadius", static_cast< float >( close.mouth * height ) );
 		sceneShader.Set( "EndLight", static_cast< float >( close.endLight * height ) );
+		//The end light's exposure: 8 at full (white), and as it fades its
+		//developed light, 1 - exp( -E ), falls evenly with endGlow rather than
+		//staying white until the last few frames.
+		const double endE = -std::log( 1.0 - std::clamp( close.endGlow, 0.0, 1.0 ) * ( 1.0 - std::exp( -8.0 ) ) );
+		sceneShader.Set( "EndGlow", static_cast< float >( endE * exposure ) );
 		sceneShader.Set( "CloudLight", static_cast< float >( exposure * kCloudGain ) );
 		sceneShader.Set( "CloudDensity", std::clamp( params[ PT_CLOUDS ], 0.0f, 1.0f ) );
 		sceneShader.Set( "Spin", static_cast< float >( spinClock ) );
@@ -682,7 +709,14 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		compositeShader.Set( "ClipIn", 1 );
 		compositeShader.Set( "IsEffect", isEffect ? 1 : 0 );
 		compositeShader.Set( "MixAmount", isEffect ? std::clamp( params[ PT_MIX ], 0.0f, 1.0f ) : 1.0f );
-		compositeShader.Set( "Blackout", static_cast< float >( close.blackout ) );
+		//The frame that comes out of the white hole is black for the part of
+		//its open shutter before the crossing and lit after it, not the plain
+		//space of the pose at shutter close: a crossing at the end of a frame
+		//showed a frame of plain space between the blackout and the flash.
+		double blackout = close.blackout;
+		if( look == Look::BlackHole && crossAt >= 0.0 && whiteHoleLaw )
+			blackout = std::max( blackout, open.blackout * std::clamp( ( crossAt - ( 1.0 - shutter ) ) / shutter, 0.0, 1.0 ) );
+		compositeShader.Set( "Blackout", static_cast< float >( blackout ) );
 		compositeShader.Set( "FlashLight", static_cast< float >( flashLight ) );
 		compositeShader.Set( "FlashKind", flashKind( look ) );
 		compositeShader.Set( "FlashAge", static_cast< float >( std::min( std::max( flashAge - 0.5 * shutter * dt, 0.0 ), 1.0e4 ) ) );

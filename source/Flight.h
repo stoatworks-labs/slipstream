@@ -35,6 +35,10 @@ constexpr double kLongPeriod = 64.0 * kDepth;
 /// Each look's transit speed at Top Speed 1, in D per second.
 double TransitSpeed( Look look );
 
+/// Where a black hole comes in from, in GM/c^2: far enough that its shadow is
+/// a fraction of a pixel. Geodesic.h's table must reach every ray from here.
+constexpr double kHoleFar = 1.0e5;
+
 /// What a look's script says at one instant. Everything the renderer needs
 /// that changes over a journey.
 struct Pose
@@ -46,6 +50,7 @@ struct Pose
 	double twist     = 0.0;///< Wormhole: the whirlpool's twist, a share of Swirl
 	double mouth     = 0.0;///< Wormhole: the cloud mouth's radius, in frame heights (0 shut)
 	double endLight  = 0.0;///< Wormhole: the light at the end, in frame heights
+	double endGlow   = 0.0;///< Wormhole: that light's brightness, 0 .. 1
 	double holeD     = 0.0;///< Black Hole: the camera's distance in GM/c^2; 0 = no hole
 	double disc      = 0.0;///< Black Hole: how much of the disc's light, 0..1
 	double blackout  = 0.0;///< the picture faded to black (the plunge), 0..1

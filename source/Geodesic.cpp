@@ -247,7 +247,7 @@ const Tables& Get()
 				t.uEscape[ static_cast< size_t >( i ) * kS + j ]               = uRow[ j ];
 				t.orbits[ ( static_cast< size_t >( i ) * kT + j ) * 4 + 1 ] = static_cast< float >( uRow[ j ] );
 			}
-			t.ends[ i * 4 + 0 ] = static_cast< float >( uEnd );
+			t.ends[ i * 4 + 0 ] = static_cast< float >( EscapeB( i ) * uEnd );
 			t.ends[ i * 4 + 1 ] = static_cast< float >( phiEnd );
 
 			fillRow( CaptureB( i ), phiRow, uRow, uEnd, phiEnd );
