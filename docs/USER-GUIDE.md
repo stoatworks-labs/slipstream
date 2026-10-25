@@ -78,7 +78,9 @@ Avenue uses the same layout under its own folder name. SW Slipstream shows up am
 SW Slip Over in the effects browser.
 
 The macOS download is a universal build (Apple silicon and Intel), as a `.dmg` or a `.zip`. It's
-**Developer ID-signed and notarised**, so the bundles just load. The Windows download is an x64
+**Developer ID-signed and notarised** by the release pipeline after publication, so the bundles
+just load. If macOS refuses a download, it's from before the signing, so download it again. The
+Windows download is an x64
 installer (`-setup.exe`) or a `.zip`. It isn't code-signed, so the installer trips SmartScreen
 once: **More info** → **Run anyway**.
 
