@@ -43,7 +43,6 @@ struct Pose
 	double tunnel    = 0.0;///< Hyperspace: the tunnel's light, 0..1
 	double pull      = 0.0;///< Warp: the rubber band, a share of Stretch (negative overshoots)
 	double clipScale = 1.0;///< Warp: the clip's size (1 in place, 0 gone into the vanishing point)
-	double clipLead  = 0.0;///< Warp: how far the inner part of the clip leads the outer
 	double twist     = 0.0;///< Wormhole: the whirlpool's twist, a share of Swirl
 	double mouth     = 0.0;///< Wormhole: the cloud mouth's radius, in frame heights (0 shut)
 	double endLight  = 0.0;///< Wormhole: the light at the end, in frame heights

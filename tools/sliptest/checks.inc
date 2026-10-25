@@ -617,6 +617,48 @@ int runJourney( const Perturb& perturb )
 		                departures.size() > 0 ? departures[ 0 ] : -1, departures.size() > 1 ? departures[ 1 ] : -1,
 		                departures.size() > 2 ? departures[ 2 ] : -1, frames( 4.0 ), frames( 10.5 ) ) );
 	}
+	//Trip over every Transit Time of a whole number of frames from 0.2 to 5 s,
+	//at 60, 50 and 30 fps, each frame's dt the difference of two readings
+	//of a clock (as the host's is), pressed on frame 3. A transit that ends
+	//on a frame's boundary leaves only rounding for the next step, and that
+	//once rounded J back onto the rest with its timer reset: a transit that
+	//never ended (Transit 2 s at 60 fps did it).
+	{
+		int stuck = 0, tried = 0;
+		double worstLate = 0.0;
+		for( double fps : { 60.0, 50.0, 30.0 } )
+			for( int frames = static_cast< int >( 0.2 * fps ); frames <= static_cast< int >( 5.0 * fps ); ++frames )
+			{
+				Journey j;
+				DriveInputs trip = in;
+				trip.drive       = Drive::Trip;
+				trip.entry       = SecondsFromParam( 0.5f );
+				trip.exit        = SecondsFromParam( 0.4375f );
+				trip.transit     = frames / fps;
+				const double total = trip.entry + trip.transit + trip.exit;
+				int f = 0;
+				bool left = false, back = false;
+				for( ; f < static_cast< int >( ( total + 2.0 ) * fps ); ++f )
+				{
+					trip.jumpPress = f == 3;
+					j.Advance( ( f + 1 ) / fps - f / fps, trip );
+					left = left || j.Phase() != 0.0;
+					if( left && j.Phase() == 0.0 )
+					{
+						back = true;
+						break;
+					}
+				}
+				++tried;
+				if( !back )
+					++stuck;
+				else
+					worstLate = std::max( worstLate, std::fabs( ( f - 3 ) / fps - total ) );
+			}
+		Check( stuck == 0 && worstLate <= 2.0 / 30.0,
+		       fmt( "Trip, %d Transit Times of whole frames at 60, 50 and 30 fps: %d never came back; the rest within %.3f s of "
+		            "Entry + Transit + Exit", tried, stuck, worstLate ) );
+	}
 	Check( forward, "Hold, Trip and Loop never moved J backwards" );
 	//Fader: J is the fader, both ways.
 	{
@@ -1126,8 +1168,8 @@ int runRing( const Perturb& perturb )
 //===========================================================================
 int runPlanck( const Perturb& perturb )
 {
-	std::printf( "\n=== planck: Planck x CIE 1931 (Wyman, Sloan and Shirley's fit) against Kim et al.'s Planckian locus\n" );
-	auto kim = []( double t, double& x, double& y ) {
+	std::printf( "\n=== planck: Planck x CIE 1931 (Wyman, Sloan and Shirley's fit) against Kang et al.'s Planckian locus\n" );
+	auto locus = []( double t, double& x, double& y ) {
 		if( t <= 4000.0 )
 			x = -0.2661239e9 / ( t * t * t ) - 0.2343589e6 / ( t * t ) + 0.8776956e3 / t + 0.179910;
 		else
@@ -1151,7 +1193,7 @@ int runPlanck( const Perturb& perturb )
 	{
 		double x, y, kx, ky, u, v, ku, kv;
 		blackbody::Chromaticity( t, x, y );
-		kim( perturb.hotterLocus ? 1.2 * t : t, kx, ky );
+		locus( perturb.hotterLocus ? 1.2 * t : t, kx, ky );
 		uv( x, y, u, v );
 		uv( kx, ky, ku, kv );
 		const double e = std::hypot( u - ku, v - kv );
@@ -1160,7 +1202,7 @@ int runPlanck( const Perturb& perturb )
 	}
 	//0.006 in uv: the +-0.006 Duv ANSI C78.377 allows a lamp sold as a
 	//colour temperature (Duv is the distance across the locus; this is the
-	//whole distance, so it is the stricter). Kim's spline is good to 1e-4;
+	//whole distance, so it is the stricter). Kang et al.'s spline is good to 1e-4;
 	//the error is Wyman et al.'s fit, whose x-bar is half the CIE table's at
 	//700 nm, which is where a 2000 K source's colour is.
 	Check( worst < 0.006, fmt( "distance from the locus in CIE 1960 uv:%s (0.006, ANSI C78.377's Duv)", what.c_str() ) );

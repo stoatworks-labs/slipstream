@@ -29,6 +29,7 @@ MUTANTS=(
 	"source/Shaders.cpp|const float ESC_MAX  = 10.0;|const float ESC_MAX  = 11.0;|--einstein|GLSL: the table's row for an escaping b, 10 -> 11"
 	"source/Flight.cpp|along[ i ] = along[ i - 1 ] + 0.5 * h * ( speed[ i - 1 ] + speed[ i ] );|along[ i ] = along[ i - 1 ] + 0.5 * h * ( speed[ i - 1 ] - speed[ i ] );|--clock|C++: the camera's trapezoids, + -> -"
 	"source/Flight.cpp|const double rateIn  = 0.5 / std::max( in.entry, 1.0e-3 );|const double rateIn  = 0.6 / std::max( in.entry, 1.0e-3 );|--journey|C++: entry's rate, 0.5 -> 0.6"
+	"source/Flight.cpp|			if( j <= 0.5 )|			if( j <= 0.4 )|--journey|C++: the step off transit's rest undone (the transit that never ended), 0.5 -> 0.4"
 	"source/Geodesic.cpp|return newtonian ? -u : -u + 3.0 * u * u;|return newtonian ? -u : -u + 2.0 * u * u;|--geodesic|C++: the orbit equation's 3u^2, 3 -> 2"
 	"source/Blackbody.cpp|y = 0.821 * lobe( lambda, 568.8, 46.9, 40.5 )|y = 0.821 * lobe( lambda, 578.8, 46.9, 40.5 )|--planck|C++: y-bar's peak, 568.8 -> 578.8 nm"
 )

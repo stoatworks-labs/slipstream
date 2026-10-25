@@ -36,7 +36,7 @@ static CFFGLPluginInfo PluginInfo(
 	FF_SOURCE,                        // Plugin type
 	"A camera flying through space with its shutter open: stars stretch into streaks as it accelerates, which is "
 	"all the films' hyperspace ever was. Four looks: Hyperspace, Warp (the rubber band and the flash), Wormhole (a "
-	"whirlpool of cloud) and Black Hole (Schwarzschild, exactly: the shadow, a lensed sky, the disc, the corona).",
+	"whirlpool of cloud) and Black Hole (Schwarzschild's: the shadow, a lensed sky, the disc and its corona).",
 	"Slipstream FFGL source"          // About
 );
 

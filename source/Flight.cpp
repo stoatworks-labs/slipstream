@@ -87,7 +87,6 @@ Pose PoseAt( Look look, double J, const ScriptSettings& settings )
 			{
 				const double s = h.t / 0.65;
 				pose.pull      = s * s * s;
-				pose.clipLead  = pose.pull;
 			}
 			pose.speed     = expRamp( ( h.t - 0.65 ) / 0.05, 5.0 );
 			pose.clipScale = 1.0 - smoothstep( 0.65, 0.69, h.t );
@@ -331,6 +330,12 @@ void Journey::Advance( double dt, const DriveInputs& in )
 			j += step;
 			moved += step;
 			remaining -= step / rateOut;
+			//A transit that runs out a hair before the frame does leaves a
+			//step smaller than half an ulp of 0.5: J would round back onto
+			//the rest, with its timer already reset, and start the transit
+			//again, for ever. Off the rest is off it.
+			if( j <= 0.5 )
+				j = std::nextafter( 0.5, 1.0 );
 			if( j >= 1.0 )
 			{
 				j        = 0.0;
