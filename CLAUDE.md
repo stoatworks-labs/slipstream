@@ -95,6 +95,9 @@ shader's second half).
 - **Provisional hand copies:** `source/StoatworksAbout*.h` (guide = "", no user guide yet)
   and `ATTRIBUTIONS.md`. Once the project is registered in stoatworks-backend,
   `sync-about.py` and `sync-attributions.py` generate them; edit them there then.
+- Local only: `~/Projects/resolume/slipstream` (built in `~/dev/slipstream` and moved), no
+  remote, nothing released, not on the website. It is a checkout under `~/Projects`, so
+  changes go through a worktree; with no remote, branch it from local `main` and merge back.
 
 ## Not done yet
 - Never loaded into Resolume on either platform. Never built for Windows. No GPU but this

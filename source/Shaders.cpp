@@ -71,9 +71,9 @@ float smearedNoise( vec2 p, float run, ivec2 period, uint salt )
 	if( run < 0.25 )
 		return valueNoise( p, period, salt );
 	float taps = 0.0;
-	for( int i = 0; i < 4; ++i )
-		taps += valueNoise( vec2( p.x, p.y - run * ( float( i ) + 0.5 ) / 4.0 ), period, salt );
-	taps *= 0.25;
+	for( int i = 0; i < 3; ++i )
+		taps += valueNoise( vec2( p.x, p.y - run * ( float( i ) + 0.5 ) / 3.0 ), period, salt );
+	taps *= 1.0 / 3.0;
 	float streak = valueNoise( vec2( p.x, 0.5 ), ivec2( period.x, 1 ), salt ^ 0x5bd1e995u );
 	streak = 0.5 + ( streak - 0.5 ) * min( 1.0, 2.0 / sqrt( run ) );
 	return mix( taps, streak, smoothstep( 2.0, 8.0, run ) );
@@ -570,11 +570,18 @@ vec3 clipSwirl( vec2 rel )
 	}
 	return sum * 0.25;
 }
+/// Domain-warped noise: the warp is two octaves of plain noise (its own blur
+/// would not show), the density four of smeared noise. A third of what it
+/// was, for the same clouds.
+float plainFbm2( vec2 p, ivec2 period, uint salt )
+{
+	return ( 2.0 * valueNoise( p, period, salt ) + valueNoise( 2.0 * p, 2 * period, salt + 0x9e3779b9u ) ) / 3.0;
+}
 float cloudDensity( vec2 wall, float run, ivec2 period, uint salt )
 {
-	float qx = smearedFbm( wall, run, period, salt, 3 );
-	float qy = smearedFbm( wall + vec2( 5.2, 1.3 ), run, period, salt ^ 0x68e31da4u, 3 );
-	return smearedFbm( wall + 4.0 * vec2( qx, qy ), run, period, salt ^ 0xb5297a4du, 5 );
+	float qx = plainFbm2( wall, period, salt );
+	float qy = plainFbm2( wall + vec2( 5.2, 1.3 ), period, salt ^ 0x68e31da4u );
+	return smearedFbm( wall + 4.0 * vec2( qx, qy ), run, period, salt ^ 0xb5297a4du, 4 );
 }
 vec3 cloudTunnel( vec2 rel, vec3 clipTint, float clipWeight )
 {
@@ -605,6 +612,9 @@ vec3 cloudTunnel( vec2 rel, vec3 clipTint, float clipWeight )
 		c         = mix( c, clipTint * ( 0.4 + 1.2 * d ), clipWeight );
 		acc += ( 1.0 - cover ) * a * c * lit;
 		cover += ( 1.0 - cover ) * a;
+		//Nothing behind solid cloud shows: stop looking.
+		if( cover > 0.995 )
+			break;
 	}
 	vec3 glow = vec3( 1.0, 0.96, 0.88 ) * 5.0 * exp( -r / ( 0.05 * Raster.y ) );
 	return CloudLight * ( acc + ( 1.0 - cover ) * glow );
