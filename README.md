@@ -41,8 +41,8 @@ opening, the Black Hole held.</sub>
 
 | Build | Download | Size |
 | --- | --- | --- |
-| Universal (Apple Silicon + Intel) · .dmg disk image | [`slipstream-0.1.0-macos-universal.dmg`](https://github.com/stoatworks-labs/slipstream/releases/download/v0.1.0/slipstream-0.1.0-macos-universal.dmg) | 745 KB |
-| Universal (Apple Silicon + Intel) · .zip archive | [`slipstream-macos-universal.zip`](https://github.com/stoatworks-labs/slipstream/releases/latest/download/slipstream-macos-universal.zip) | 423 KB |
+| Universal (Apple Silicon + Intel) · .dmg disk image | [`slipstream-0.1.0-macos-universal.dmg`](https://github.com/stoatworks-labs/slipstream/releases/download/v0.1.0/slipstream-0.1.0-macos-universal.dmg) | 526 KB |
+| Universal (Apple Silicon + Intel) · .zip archive | [`slipstream-macos-universal.zip`](https://github.com/stoatworks-labs/slipstream/releases/latest/download/slipstream-macos-universal.zip) | 460 KB |
 
 </details>
 
@@ -58,7 +58,7 @@ opening, the Black Hole held.</sub>
 
 All builds, checksums and release notes: [github.com/stoatworks-labs/slipstream/releases](https://github.com/stoatworks-labs/slipstream/releases).
 
-The Windows builds are unsigned, so SmartScreen warns once.
+macOS builds are signed and notarised and open normally. The Windows builds are unsigned, so SmartScreen warns once.
 
 <!-- downloads:end -->
 
