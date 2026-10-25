@@ -62,6 +62,10 @@ The Windows builds are unsigned, so SmartScreen warns once.
 
 <!-- downloads:end -->
 
+## Video
+
+[![Slipstream: hyperspace, warp, wormholes and a black hole for Resolume](docs/video-thumb.png)](https://www.youtube.com/watch?v=yR763H5ybqM)
+
 ## The one idea
 
 **A camera flying through space with its shutter open.** Nothing draws a streak. A star
