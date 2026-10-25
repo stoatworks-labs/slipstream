@@ -125,7 +125,10 @@ the last Journey to the new one literally: a looping ramp's wrap from 0.99 to 0 
 whole trip backwards in one frame, both flashes and all, every time round. A jump back of
 more than half a trip now counts as going round. Forward stays literal: the first version
 took the short way round both ways, which sent Journey set straight from 0 to 0.76 backwards
-through the exit, missing the white-out, and the sweep found Flash dead.
+through the exit, missing the white-out, and the sweep found Flash dead. The second version
+measured each move from J, which holds 1 as 0: a fader held at the top was a whole trip
+forward every frame, every flash on every frame (the video's maker found it). Each move is
+from the last Journey as it came now.
 
 **A table read linearly must hold something that is linear between its rows.** The end
 table held u_end = 1/r_min, which falls as 1/b across rows evenly spaced in ln( b − b_c ):

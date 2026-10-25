@@ -123,6 +123,7 @@ public:
 private:
 	double start = 0.0, end = 0.0;
 	double phase = 0.0;///< J now, in [0, 1), landed exactly on the rests
+	double faderLast = 0.0;///< Fader: the last Journey as it came, 1 kept as 1
 	double timer = 0.0;///< Trip and Loop: time held in transit, or cruising
 	bool tripping = false;
 	bool lastFader = false;

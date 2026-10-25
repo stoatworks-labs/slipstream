@@ -149,7 +149,7 @@ The black hole's shadow and disc are opaque.
 ### Measured offline, on macOS
 
 `tools/verify.sh` passes on this machine (Apple M4 Max, macOS 26.4.1) against a fresh
-universal Release build (25 October 2026, 14 minutes). It runs every picture check at **two rasters**,
+universal Release build (25 October 2026, 19 minutes). It runs every picture check at **two rasters**,
 1280×720 and 320×180, and all but four of them again on **Apple's software renderer** at
 320×180. What it establishes:
 
@@ -191,6 +191,10 @@ universal Release build (25 October 2026, 14 minutes). It runs every picture che
 | SW Slip Over | Black Hole, held | 0.79 | 1.50 | 5.12 |
 
 The Wormhole is the expensive one: its clouds are three layers of domain-warped noise a pixel.
+These were measured on a quiet machine before the last fixes before release. Benched back to
+back with the build before them, on a machine busy with other renders, the released build's
+median frame time was within 0.88 to 1.24 times the earlier one's in every row, with no
+pattern: what changed costs nothing you can measure through the noise.
 
 ### In Resolume, on Windows
 

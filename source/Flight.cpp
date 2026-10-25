@@ -224,6 +224,7 @@ double Journey::Phase() const
 void Journey::Reset()
 {
 	start = end = phase = 0.0;
+	faderLast   = 0.0;
 	timer       = 0.0;
 	tripping    = false;
 }
@@ -237,13 +238,17 @@ void Journey::Advance( double dt, const DriveInputs& in )
 		//that jumps back further has gone round, not back: a looping ramp's
 		//wrap from 0.99 to 0 flies a hundredth forward, where taken literally
 		//it flew the whole trip backwards in one frame, both flashes and all.
+		//The move is from the last Journey as it came, not from J: J holds 1
+		//as 0, and from there a fader held at 1 was a whole trip forward every
+		//frame.
 		const double target = std::clamp( in.fader, 0.0, 1.0 );
-		double delta        = target - phase;
+		double delta        = target - ( lastFader ? faderLast : phase );
 		if( delta < -0.5 )
 			delta += 1.0;
 		start     = lastFader ? end : phase;
 		end       = start + delta;
 		phase     = target >= 1.0 ? 0.0 : target;
+		faderLast = target;
 		lastFader = true;
 		return;
 	}

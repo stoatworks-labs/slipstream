@@ -797,12 +797,14 @@ int runJourney( const Perturb& perturb )
 	//Fader: J is circular. Forward is taken as it comes, back up to half a
 	//trip; a jump back further has gone round, so a looping ramp's wrap from
 	//0.99 to 0 flies a hundredth forward (taken literally, it flew the whole
-	//trip backwards in one frame, both flashes and all).
+	//trip backwards in one frame, both flashes and all). Held at 1 it flies
+	//nothing (J holds 1 as 0, and measured from J a fader at the top once
+	//flew a whole trip every frame).
 	{
 		Journey j;
 		in.drive = Drive::Fader;
-		const double journeys[] = { 0.0, 0.3, 0.7, 0.4, 0.85, 1.0, 0.0, 0.05, 0.95, 0.25, 0.75, 0.25 };
-		const double flown[]    = { 0.0, 0.3, 0.4, -0.3, 0.45, 0.15, 0.0, 0.05, 0.9, 0.3, 0.5, -0.5 };
+		const double journeys[] = { 0.0, 0.3, 0.7, 0.4, 0.85, 1.0, 1.0, 1.0, 0.0, 0.05, 0.95, 0.25, 0.75, 0.25 };
+		const double flown[]    = { 0.0, 0.3, 0.4, -0.3, 0.45, 0.15, 0.0, 0.0, 0.0, 0.05, 0.9, 0.3, 0.5, -0.5 };
 		double worst = 0.0;
 		for( size_t i = 0; i < sizeof( journeys ) / sizeof( journeys[ 0 ] ); ++i )
 		{
