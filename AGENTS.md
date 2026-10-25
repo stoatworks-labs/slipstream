@@ -325,7 +325,11 @@ the release session, from langton's demo. What a reader of it must know:
   and b u_end in its ends, the Loop's rest step, the fader's wrap, the clip not smeared by
   cruising, the white hole's crossing frame, Swirl in the spin, EndGlow, ChordLaw and
   EndsLaw): check_shaders.py caught the three changed pieces before anything was
-  re-spliced, and the port was identical to the plugin again on its first run.
+  re-spliced, and the port was identical to the plugin again on its first run. Then the
+  Fader's move from the last Journey rather than J (`faderLast`: J holds 1 as 0, so a
+  fader held at 1.0 flew a whole trip every frame): the cross-check already held a fader
+  at 1.0, failed against the C++ without the fix at the first such frame, and is
+  identical against the C++ with it.
 - **Mutants**: 23 one-token mutants of the port and frame logic, all caught (2026-10-25,
   on 2d3b679): the first trap's fix undone, the camera's trapezoid, the orbit equation's
   3u², a CIE lobe weight, Hole Size's range, the warp's spring, the sky's mean light, the

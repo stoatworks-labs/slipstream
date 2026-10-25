@@ -364,6 +364,8 @@ class Journey {
     this.start = 0.0;
     this.end = 0.0;
     this.phase = 0.0;
+    /** Fader: the last Journey as it came, 1 kept as 1. */
+    this.faderLast = 0.0;
     this.timer = 0.0;
     this.tripping = false;
     this.lastFader = false;
@@ -375,6 +377,7 @@ class Journey {
 
   Reset() {
     this.start = this.end = this.phase = 0.0;
+    this.faderLast = 0.0;
     this.timer = 0.0;
     this.tripping = false;
   }
@@ -389,13 +392,16 @@ class Journey {
     if (input.drive === Drive.Fader) {
       // Scrubbing: J is the fader, and J is circular (1 is 0). Back further
       // than half a trip has gone round, not back: a looping ramp's wrap from
-      // 0.99 to 0 flies a hundredth forward.
+      // 0.99 to 0 flies a hundredth forward. The move is from the last Journey
+      // as it came, not from J, which holds 1 as 0: from there a fader held at
+      // 1 was a whole trip every frame.
       const target = clamp(input.fader, 0.0, 1.0);
-      let delta = target - this.phase;
+      let delta = target - (this.lastFader ? this.faderLast : this.phase);
       if (delta < -0.5) delta += 1.0;
       this.start = this.lastFader ? this.end : this.phase;
       this.end = this.start + delta;
       this.phase = target >= 1.0 ? 0.0 : target;
+      this.faderLast = target;
       this.lastFader = true;
       return;
     }
