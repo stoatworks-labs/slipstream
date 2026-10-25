@@ -42,10 +42,11 @@ towards you, the brighter. Each panel is a whole 1280 × 720 frame at half size.
 > **On Windows it has been in Resolume.** In Arena 7.27.1 on win-lab (a virtual machine with
 > software rendering and no GPU), both plugins load and register as `SW Slipstream` and `SW Slip
 > Over`, every control is as declared, both render, and Arena's log stays clean: all of the fleet's
-> Arena checks that can run there passed, on builds of this release's code. Each control is
+> Arena checks that can run there passed, three times, the last on this release's own Windows
+> download. Each control is
 > measured against a still picture, so the ones that only act over time (Engage, the four times and
 > Flash) can't show there, and others need the right look or moment of the trip first: 18 of the
-> source's controls changed the picture outright and 22 of the Over's, with the rest needing a
+> source's controls changed the picture outright and 21 or 22 of the Over's, with the rest needing a
 > precondition the gate sets or too close to call in a still. Software rendering says nothing about
 > a GPU, or about speed.
 >

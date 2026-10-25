@@ -202,10 +202,11 @@ The fleet's Arena gate (`plugin-bench`, on win-lab: Resolume Arena 7.27.1 under 
 llvmpipe software renderer) takes the Windows build: both DLLs load, both plugins register
 (`SR01` a source, `SR02` an effect) and appear in Arena's lists, all 37 and 41 controls match
 their names, order, types, ranges and defaults, the names at FFGL's 16-character limit come
-through whole, each renders a frame with content, and 18 and 22 controls visibly move the
-picture in a still (the rest need a look or a moment of the journey to act, or, like the
-timings, act only over time). Arena logged no shader errors and survived the run: 15
-passed, 0 failed, 2 skipped. Nobody has played a show with it.
+through whole, each renders a frame with content, and 18 of the source's controls and 21 or
+22 of the Over's visibly move the picture in a still (the rest need a look or a moment of the
+journey to act, or, like the timings, act only over time). Arena logged no shader errors and
+survived every run: 15 passed, 0 failed, 2 skipped, three times, the last on this release's
+own Windows download. Nobody has played a show with it.
 
 ### Not tested, and limits
 
