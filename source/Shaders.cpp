@@ -14,6 +14,8 @@ const char* const kVersion = "#version 410 core\n";
 // atan's branch cut is, none where the distance wraps.
 //===========================================================================
 const char* const kCommon = R"(
+//smoothstep is undefined for edge0 >= edge1 (GLSL 4.10, 8.3): every fade
+//down is written 1 - smoothstep( low, high, x ).
 const float PI  = 3.14159265358979;
 const float TAU = 6.28318530717959;
 const float FIELD_DEPTH = 4.0;
@@ -251,6 +253,7 @@ uniform float Pull0, Pull1, Twist0, Twist1;
 uniform float Stretch, PinchRadius, SwirlRadius;
 uniform float Dispersion;
 uniform float CopyLaw;
+uniform vec4 TestStar;
 
 flat out vec3 starLight;
 flat out vec4 segment;
@@ -269,6 +272,14 @@ void main()
 	float luminosity = starLuminosity( h );
 	h                = pcg( h );
 	float kelvin     = starKelvin( h );
+	//The harness's one star, at a place it chose.
+	if( TestStar.w > 0.0 )
+	{
+		x          = TestStar.x;
+		y          = TestStar.y;
+		z0         = TestStar.z;
+		luminosity = TestStar.w;
+	}
 
 	float rho  = max( length( vec2( x, y ) ), 1.0e-4 );
 	vec2 dir   = vec2( x, y ) / rho;
@@ -339,7 +350,7 @@ void main()
 	//all the way along (no inverse square).
 	float flux = FluxLaw > 0.5 ? 1.0 / ( rho * rho + z * z ) : 1.0 / ( rho * rho + depths.x * depths.x );
 	//Stars come in out of the dark at the far end of the box.
-	float fade   = smoothstep( FIELD_NEAR + FIELD_DEPTH, FIELD_NEAR + 0.8 * FIELD_DEPTH, z );
+	float fade   = 1.0 - smoothstep( FIELD_NEAR + 0.8 * FIELD_DEPTH, FIELD_NEAR + FIELD_DEPTH, z );
 	float energy = flux * n * z * z * depths.z * segment.z * segment.w * fade;
 
 	float across = local.y;
@@ -417,6 +428,8 @@ uniform uint StarSeed;
 uniform float BendLaw;
 uniform float CaptureLaw;
 uniform float SpinSign;
+uniform float DiscTexture;
+uniform float SeamForTest;
 
 out vec4 Scene;
 
@@ -452,16 +465,20 @@ vec3 clipMirrored( vec2 px, float lod )
 // towards the vanishing point over the shutter as a star does, so pixel p
 // averages the clip over p u for u uniform in [ 1, k ], k = 1 + dZ / depth
 // (uniform in u: the time a receding point spends at each scale, with the
-// picture's surface brightness constant). Beyond the frame the picture
-// carries on in mirror image.
+// picture's surface brightness constant). A point of the clip becomes an
+// evenly lit line from p0 / k to p0. Beyond the frame the picture carries on
+// in mirror image.
 //---------------------------------------------------------------------------
 vec3 clipSmear( vec2 rel )
 {
 	if( SmearK <= 1.0 + 1.0e-6 )
 		return clipAt( Vanish + rel, 0.0 );
-	const int N = 24;
+	//The mip level half a step coarser than the taps' spacing: the taps'
+	//sum then aliases by under 1% (a blur of 0.57 spacings), and the smear
+	//shows no copies of itself.
+	const int N = 32;
 	float du  = ( SmearK - 1.0 ) / float( N );
-	float lod = clamp( log2( max( du * length( rel ), 1.0 ) ), 0.0, ClipLevels );
+	float lod = clamp( log2( max( du * length( rel ), 1.0 ) ) + 0.5, 0.0, ClipLevels );
 	vec3 sum  = vec3( 0.0 );
 	for( int i = 0; i < N; ++i )
 		sum += clipMirrored( Vanish + rel * ( 1.0 + du * ( float( i ) + 0.5 ) ), lod );
@@ -577,7 +594,9 @@ vec3 cloudTunnel( vec2 rel, vec3 clipTint, float clipWeight )
 		float ang = theta - Spin / R - w * PITCH;
 		vec2 wall = vec2( ang / TAU * around, w * perUnit );
 		float run = max( ShutterZ, Focal * R / ( r * r ) ) * perUnit;
-		float d   = cloudDensity( wall, run, ivec2( int( around ), int( LONG_PERIOD * perUnit ) ), 0x1b873593u + uint( k ) * 0x85ebca6bu );
+		//--seam's negative control: a lattice that does not close round.
+		ivec2 period = ivec2( int( around ) + ( SeamForTest > 0.5 ? 1 : 0 ), int( LONG_PERIOD * perUnit ) );
+		float d   = cloudDensity( wall, run, period, 0x1b873593u + uint( k ) * 0x85ebca6bu );
 		//Billows: the noise folded about its middle, so cloud edges are
 		//ridged and rounded rather than a smooth wash.
 		float a   = smoothstep( 0.46, 0.68, d ) * CloudDensity * ( k == 2 ? 1.0 : 0.85 );
@@ -611,6 +630,10 @@ vec3 wormhole( vec2 rel, vec3 starLight )
 	return e;
 }
 
+//---------------------------------------------------------------------------
+// (MSVC caps one string literal near 16 KB, C2026: the scene is two adjacent
+// raw strings from here, which the compiler joins and tools/glslc.sh too.)
+)" R"(
 //---------------------------------------------------------------------------
 // Black Hole. Tables: see Geodesic.h. A bilinear read by hand (texelFetch),
 // so the interpolation is float and not the filter unit's fixed point.
@@ -868,8 +891,9 @@ vec3 blackHole( vec2 rel, out float opaque )
 		float nb    = valueNoise( vec2( ( az - omega * DiscTimeB ) / TAU * 48.0 + 17.0, at.y + 5.0 ), ivec2( 48, 1 << 20 ), 0xa54ff53au );
 		float fine  = valueNoise( vec2( ( az - omega * mix( DiscTimeA, DiscTimeB, DiscBlend ) ) / TAU * 192.0, at.y * 4.0 ), ivec2( 192, 1 << 20 ), 0x510e527fu );
 		float swirl = mix( na, nb, DiscBlend ) * 0.75 + 0.25 * fine;
-		float edge  = smoothstep( DiscOuter, DiscOuter * 0.55, rHit );
-		light += DiscLight * level * blackbodyColour( seen ) * ( 0.35 + 1.3 * swirl * swirl ) * edge;
+		float edge  = 1.0 - smoothstep( DiscOuter * 0.55, DiscOuter, rHit );
+		float grain = DiscTexture > 0.5 ? 0.35 + 1.3 * swirl * swirl : 1.0;
+		light += DiscLight * level * blackbodyColour( seen ) * grain * edge;
 		opaque = 1.0;
 	}
 

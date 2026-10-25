@@ -527,7 +527,8 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		const GLfloat zero[ 4 ] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		glClearBufferfv( GL_COLOR, 0, zero );
 	}
-	const int starCount = std::clamp( static_cast< int >( std::lround( params[ PT_STARS ] ) ), 0, kMaxStars );
+	const bool testStarOn = testStar[ 3 ] > 0.0f;
+	const int starCount   = testStarOn ? 1 : std::clamp( static_cast< int >( std::lround( params[ PT_STARS ] ) ), 0, kMaxStars );
 	if( look != Look::BlackHole && starCount > 0 )
 	{
 		ScopedShaderBinding shader( starShader.GetGLID() );
@@ -545,7 +546,8 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		starShader.Set( "Raster", static_cast< float >( width ), static_cast< float >( height ) );
 		starShader.Set( "Sigma", sigma );
 		starShader.Set( "StarGain", static_cast< float >( exposure * kStarGain ) );
-		starShader.Set( "StarColour", std::clamp( params[ PT_STAR_COLOUR ], 0.0f, 1.0f ) );
+		starShader.Set( "StarColour", testStarOn ? 0.0f : std::clamp( params[ PT_STAR_COLOUR ], 0.0f, 1.0f ) );
+		starShader.Set( "TestStar", testStar[ 0 ], testStar[ 1 ], testStar[ 2 ], testStar[ 3 ] );
 		starShader.Set( "Pull0", static_cast< float >( open.pull ) );
 		starShader.Set( "Pull1", static_cast< float >( close.pull ) );
 		starShader.Set( "Twist0", look == Look::Wormhole ? twist0 : 0.0f );
@@ -596,7 +598,7 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		//Hyperspace: the clip's smear, k = 1 + dZ / Clip Depth, and its share
 		//fading to Clip Through as the tunnel comes up.
 		const double clipDepth = ClipDepthFromParam( params[ PT_CLIP_DEPTH ] );
-		sceneShader.Set( "SmearK", static_cast< float >( 1.0 + shutterZ / clipDepth ) );
+		sceneShader.Set( "SmearK", static_cast< float >( 1.0 + shutterZ / ( clipDepth * kDepth ) ) );
 		float clipShare = 1.0f;
 		if( look == Look::Hyperspace )
 			clipShare = static_cast< float >( 1.0 + ( through - 1.0 ) * close.tunnel );
@@ -633,11 +635,11 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		sceneShader.Set( "DiscInner", 6.0f );
 		sceneShader.Set( "DiscOuter", static_cast< float >( DiscOuterFromParam( params[ PT_DISC_SIZE ] ) ) );
 		sceneShader.Set( "DiscKelvin", static_cast< float >( DiscHeatFromParam( params[ PT_DISC_HEAT ] ) ) );
-		sceneShader.Set( "DiscLight",
-		                 static_cast< float >( std::clamp( params[ PT_DISC ], 0.0f, 1.0f ) * close.disc * exposure * kDiscGain ) );
+		discLight   = std::clamp( params[ PT_DISC ], 0.0f, 1.0f ) * close.disc * exposure * kDiscGain;
+		coronaLight = std::clamp( params[ PT_CORONA ], 0.0f, 1.0f ) * close.disc * exposure * kCoronaGain;
+		sceneShader.Set( "DiscLight", static_cast< float >( discLight ) );
 		sceneShader.Set( "DopplerAmount", std::clamp( params[ PT_DOPPLER ], 0.0f, 1.0f ) );
-		sceneShader.Set( "CoronaLight",
-		                 static_cast< float >( std::clamp( params[ PT_CORONA ], 0.0f, 1.0f ) * close.disc * exposure * kCoronaGain ) );
+		sceneShader.Set( "CoronaLight", static_cast< float >( coronaLight ) );
 		const double timeA = discClock, timeB = std::fmod( discClock + 0.5 * kDiscPeriod, kDiscPeriod );
 		sceneShader.Set( "DiscTimeA", static_cast< float >( timeA ) );
 		sceneShader.Set( "DiscTimeB", static_cast< float >( timeB ) );
@@ -661,6 +663,8 @@ FFResult SlipstreamPlugin::ProcessOpenGL( ProcessOpenGLStruct* pgl )
 		sceneShader.Set( "BendLaw", bendLaw ? 1.0f : 0.0f );
 		sceneShader.Set( "CaptureLaw", captureLaw ? 1.0f : 0.0f );
 		sceneShader.Set( "SpinSign", spinSign );
+		sceneShader.Set( "DiscTexture", discTexture ? 1.0f : 0.0f );
+		sceneShader.Set( "SeamForTest", seamForTest ? 1.0f : 0.0f );
 		quad.Draw();
 		unbindTextureUnits( 5 );
 	}

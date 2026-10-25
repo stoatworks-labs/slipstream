@@ -852,9 +852,9 @@ int main( int argc, char** argv )
 	if( mode == "list" )
 	{
 		SlipstreamPlugin plugin( effect );
-		std::printf( "%-3s %-16s %-9s %s\n", "id", "name", "kind", "default" );
+		std::printf( "%-3s %-18s %-9s %s\n", "id", "name", "kind", "default" );
 		for( const NamedParameter& parameter : listParameters( plugin ) )
-			std::printf( "%-3u %-16s %-9s %.4f\n", parameter.index, parameter.name.c_str(), kindName( parameter.type ), parameter.value );
+			std::printf( "%-3u %-18s %-9s %.4f\n", parameter.index, parameter.name.c_str(), kindName( parameter.type ), parameter.value );
 		return 0;
 	}
 	if( mode == "expect" )

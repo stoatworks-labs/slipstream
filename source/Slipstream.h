@@ -122,6 +122,27 @@ public:
 	{
 		floatClockForTest = on;
 	}
+	/// One star, white, at (x, y) across the line of flight (field units),
+	/// z0 along the box and luminosity L, in place of the field. L <= 0 puts
+	/// the field back.
+	void SetTestStarForTest( double x, double y, double z0, double luminosity )
+	{
+		testStar[ 0 ] = static_cast< float >( x );
+		testStar[ 1 ] = static_cast< float >( y );
+		testStar[ 2 ] = static_cast< float >( z0 );
+		testStar[ 3 ] = static_cast< float >( luminosity );
+	}
+	/// The disc's light without its turbulence: --disc reads the shift alone.
+	void SetDiscTextureForTest( bool on )
+	{
+		discTexture = on;
+	}
+	/// --seam's negative control: the clouds' lattice one cell short of
+	/// wrapping round the vanishing point.
+	void SetSeamForTest( bool on )
+	{
+		seamForTest = on;
+	}
 
 	const Journey& JourneyState() const
 	{
@@ -159,6 +180,14 @@ public:
 	{
 		return holeD;
 	}
+	double LastDiscLight() const
+	{
+		return discLight;
+	}
+	double LastCoronaLight() const
+	{
+		return coronaLight;
+	}
 
 private:
 	void UpdateClock();
@@ -195,9 +224,11 @@ private:
 	double frameDt   = 0.0;
 
 	//What the last frame used, for the harness.
-	double shutterZ = 0.0, focal = 0.0, flashLight = 0.0, holeD = 0.0;
+	double shutterZ = 0.0, focal = 0.0, flashLight = 0.0, holeD = 0.0, discLight = 0.0, coronaLight = 0.0;
 
 	bool fluxLaw = true, copyLaw = true, lengthLaw = true, roundTrip = true, bendLaw = true, captureLaw = true;
+	bool discTexture = true, seamForTest = false;
+	float testStar[ 4 ] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float spinSign         = 1.0f;
 	bool floatClockForTest = false;
 };
