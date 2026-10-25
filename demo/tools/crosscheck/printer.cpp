@@ -53,11 +53,12 @@ uint32_t bitsOf( float v )
 	return bits;
 }
 
-const char* kPoseFields = "speed tunnel pull clipScale twist mouth endLight holeD disc blackout scene";
+const char* kPoseFields = "speed tunnel pull clipScale twist mouth endLight endGlow holeD disc blackout scene";
 std::string pose( const Pose& p )
 {
 	return d( p.speed ) + " " + d( p.tunnel ) + " " + d( p.pull ) + " " + d( p.clipScale ) + " " + d( p.twist ) + " "
-	       + d( p.mouth ) + " " + d( p.endLight ) + " " + d( p.holeD ) + " " + d( p.disc ) + " " + d( p.blackout ) + " "
+	       + d( p.mouth ) + " " + d( p.endLight ) + " " + d( p.endGlow ) + " " + d( p.holeD ) + " " + d( p.disc ) + " "
+	       + d( p.blackout ) + " "
 	       + d( p.scene );
 }
 
@@ -175,9 +176,10 @@ int main()
 	// Each look's script, all through J (and either side of it).
 	//-----------------------------------------------------------------------
 	std::printf( "posefields %s\n", kPoseFields );
-	const double holds[ 3 ] = { 1.0, DistanceForShadow( 0.3 * 0.5 * 60.0 * 3.14159265358979323846 / 180.0 ), 4000.0 };
+	//The fourth hold is past kHoleFar, where the approach starts from the hold.
+	const double holds[ 4 ] = { 1.0, DistanceForShadow( 0.3 * 0.5 * 60.0 * 3.14159265358979323846 / 180.0 ), 4000.0, 2.0e5 };
 	for( int look = 0; look < 4; ++look )
-		for( int s = 0; s < 3; ++s )
+		for( int s = 0; s < 4; ++s )
 		{
 			ScriptSettings settings;
 			settings.stretch  = 0.2 * s + 0.1;
@@ -263,6 +265,41 @@ int main()
 					back = frame;
 			}
 			std::printf( "trip %g %d back=%d h=%08" PRIx32 "\n", fps, n, back, h );
+		}
+	}
+
+	//The same trap at the other rest: a Loop whose Cruise Time ends on a
+	//frame's boundary must still leave (2d3b679). Every whole-frame Cruise
+	//Time from 0.2 to 5 s, the first two round trips' departures.
+	for( int r = 0; r < 3; ++r )
+	{
+		const double fps = rates[ r ];
+		for( int n = static_cast< int >( std::ceil( 0.2 * fps ) ); n <= static_cast< int >( 5.0 * fps ); ++n )
+		{
+			Journey journey;
+			DriveInputs in;
+			in.drive   = Drive::Loop;
+			in.entry   = 0.5;
+			in.exit    = 0.5;
+			in.transit = 0.5;
+			in.cruise  = n / fps;
+			int left[ 2 ] = { -1, -1 };
+			int trips     = 0;
+			bool atRest   = true;
+			uint32_t h    = 2166136261u;
+			for( int frame = 0; frame < 4000 && trips < 2; ++frame )
+			{
+				const double dt = frame == 0 ? 0.0 : ( frame / fps ) - ( ( frame - 1 ) / fps );
+				journey.Advance( dt, in );
+				uint64_t bits;
+				const double p = journey.Phase();
+				std::memcpy( &bits, &p, sizeof bits );
+				h = fnv( fnv( h, static_cast< uint32_t >( bits ) ), static_cast< uint32_t >( bits >> 32 ) );
+				if( atRest && p != 0.0 )
+					left[ trips++ ] = frame;
+				atRest = p == 0.0;
+			}
+			std::printf( "loop %g %d left=%d,%d h=%08" PRIx32 "\n", fps, n, left[ 0 ], left[ 1 ], h );
 		}
 	}
 

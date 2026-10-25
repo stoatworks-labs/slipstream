@@ -49,7 +49,7 @@ const fnv = (h, word) => Math.imul((h ^ word) >>> 0, 16777619) >>> 0;
 const F = Math.fround;
 const kPi = 3.14159265358979323846;
 
-const poseFields = ['speed', 'tunnel', 'pull', 'clipScale', 'twist', 'mouth', 'endLight', 'holeD', 'disc', 'blackout', 'scene'];
+const poseFields = ['speed', 'tunnel', 'pull', 'clipScale', 'twist', 'mouth', 'endLight', 'endGlow', 'holeD', 'disc', 'blackout', 'scene'];
 const pose = (p) => poseFields.map((k) => d(p[k])).join(' ');
 
 function hostAt(scenario, frame) {
@@ -108,9 +108,9 @@ for (let k = 0; k <= 400; k += 1) print(`dist ${k} ${d(P.DistanceForShadow(1.0e-
 // Each look's script.
 //---------------------------------------------------------------------------
 print(`posefields ${poseFields.join(' ')}`);
-const holds = [1.0, P.DistanceForShadow(0.3 * 0.5 * 60.0 * kPi / 180.0), 4000.0];
+const holds = [1.0, P.DistanceForShadow(0.3 * 0.5 * 60.0 * kPi / 180.0), 4000.0, 2.0e5];
 for (let look = 0; look < 4; look += 1) {
-  for (let s = 0; s < 3; s += 1) {
+  for (let s = 0; s < 4; s += 1) {
     const settings = { stretch: 0.2 * s + 0.1, holeHold: holds[s] };
     for (let k = -100; k <= 1100; k += 1) print(`pose ${look} ${s} ${k} ${pose(P.PoseAt(look, k / 1000.0, settings))}`);
     const exact = [0.0, 0.5, 1.0, 0.25, 0.75, 0.4, 0.575, 0.325, 0.65, 0.8, 0.999999999, 0.5000000000000001];
@@ -167,6 +167,27 @@ for (const fps of rates) {
       if (frame > 1 && journey.Phase() === 0.0) back = frame;
     }
     print(`trip ${fps} ${n} back=${back} h=${h32(h)}`);
+  }
+}
+
+for (const fps of rates) {
+  for (let n = Math.ceil(0.2 * fps); n <= Math.trunc(5.0 * fps); n += 1) {
+    const journey = new P.Journey();
+    const input = { drive: P.Drive.Loop, engage: false, jumpPress: false, fader: 0.0, entry: 0.5, exit: 0.5, transit: 0.5, cruise: n / fps };
+    const left = [-1, -1];
+    let trips = 0;
+    let atRest = true;
+    let h = 2166136261;
+    for (let frame = 0; frame < 4000 && trips < 2; frame += 1) {
+      const dt = frame === 0 ? 0.0 : (frame / fps) - ((frame - 1) / fps);
+      journey.Advance(dt, input);
+      const p = journey.Phase();
+      view.setFloat64(0, p);
+      h = fnv(fnv(h, view.getUint32(4)), view.getUint32(0));
+      if (atRest && p !== 0.0) { left[trips] = frame; trips += 1; }
+      atRest = p === 0.0;
+    }
+    print(`loop ${fps} ${n} left=${left[0]},${left[1]} h=${h32(h)}`);
   }
 }
 

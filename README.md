@@ -229,7 +229,7 @@ The CPU half is a JavaScript port — the journey and its camera (`Flight.cpp`),
 mappings (`Controls.cpp`), the blackbody table and the black hole's orbit tables, RK4 in
 double — and `demo/tools/crosscheck/` holds it to the plugin: the port against the
 plugin's own C++, and the port's frame logic against the **real plugin class** in a GL
-context, every uniform of every pass read back out of its programs over 9,864 frames, to
+context, every uniform of every pass read back out of its programs over 9,976 frames, to
 the bit once the plugin's libm results are replayed into the port (verify.sh runs both).
 It needs WebGL2 with `EXT_color_buffer_float`. Stars is a dropdown of fifteen of its
 values and Jump a toggle the page releases; the Over runs on generated clips or your own.

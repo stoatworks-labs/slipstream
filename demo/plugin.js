@@ -227,6 +227,7 @@ function halfOf(J) {
   if (j < 0.5) return { exiting: false, t: 2.0 * j };
   return { exiting: true, t: 2.0 * j - 1.0 };
 }
+/** Where a black hole comes in from, in GM/c^2 (Flight.h). */
 const kHoleFar = 1.0e5;
 const kPlunge = 3.05;
 
@@ -241,7 +242,7 @@ function TransitSpeed(look) {
 }
 
 function newPose() {
-  return { speed: 0.0, tunnel: 0.0, pull: 0.0, clipScale: 1.0, twist: 0.0, mouth: 0.0, endLight: 0.0, holeD: 0.0, disc: 0.0, blackout: 0.0, scene: 1.0 };
+  return { speed: 0.0, tunnel: 0.0, pull: 0.0, clipScale: 1.0, twist: 0.0, mouth: 0.0, endLight: 0.0, endGlow: 0.0, holeD: 0.0, disc: 0.0, blackout: 0.0, scene: 1.0 };
 }
 
 /** The look's script at phase J (any real; read mod 1). */
@@ -290,9 +291,14 @@ function PoseAt(look, J, settings) {
         pose.speed = 1.0;
         const grow = smoothstep(0.15, 0.5, h.t);
         pose.endLight = 2.0 * grow * grow * grow;
+        pose.endGlow = 1.0;
       } else {
+        // Through: the white-out flashes at 0.5 and the scene unwinds out of
+        // it as it fades (Flash 0 included: no cut from white).
         pose.twist = 1.0 - smoothstep(0.5, 1.0, h.t);
         pose.speed = 1.0 - smoothstep(0.5, 0.8, h.t);
+        pose.endLight = 2.0;
+        pose.endGlow = 1.0 - smoothstep(0.5, 0.7, h.t);
       }
       break;
 
@@ -301,7 +307,8 @@ function PoseAt(look, J, settings) {
       if (!h.exiting) {
         if (J - Math.floor(J) > 0.0) {
           const s = smoothstep(0.0, 1.0, h.t);
-          pose.holeD = Math.exp(Math.log(kHoleFar) + (Math.log(hold) - Math.log(kHoleFar)) * s);
+          const from = max2(kHoleFar, hold);
+          pose.holeD = Math.exp(Math.log(from) + (Math.log(hold) - Math.log(from)) * s);
           pose.disc = smoothstep(0.3, 0.9, h.t);
         }
       } else if (h.t < 0.6) {
@@ -349,6 +356,8 @@ function DistanceForShadow(angle) {
 
 /** std::nextafter( 0.5, 1.0 ): doubles in [0.5, 1) are 2^-53 apart. */
 const kAfterHalf = 0.5 + 2 ** -53;
+/** std::nextafter( 0.0, 1.0 ): the smallest denormal. */
+const kAfterZero = Number.MIN_VALUE;
 
 class Journey {
   constructor() {
@@ -378,9 +387,15 @@ class Journey {
   /** `input`: { drive, engage, jumpPress, fader, entry, transit, exit, cruise }. */
   Advance(dt, input) {
     if (input.drive === Drive.Fader) {
+      // Scrubbing: J is the fader, and J is circular (1 is 0). Back further
+      // than half a trip has gone round, not back: a looping ramp's wrap from
+      // 0.99 to 0 flies a hundredth forward.
+      const target = clamp(input.fader, 0.0, 1.0);
+      let delta = target - this.phase;
+      if (delta < -0.5) delta += 1.0;
       this.start = this.lastFader ? this.end : this.phase;
-      this.end = clamp(input.fader, 0.0, 1.0);
-      this.phase = this.end >= 1.0 ? 0.0 : this.end;
+      this.end = this.start + delta;
+      this.phase = target >= 1.0 ? 0.0 : target;
       this.lastFader = true;
       return;
     }
@@ -419,6 +434,9 @@ class Journey {
         moved += step;
         remaining -= step / rateIn;
         if (j >= 0.5) j = 0.5;
+        // A cruise that runs out on the frame's own boundary leaves no time to
+        // step with (Cruise Time 2 s at 60 fps): off the rest is off it.
+        if (j <= 0.0) j = kAfterZero;
       } else if (j < 0.5) {
         const step = min2(remaining * rateIn, 0.5 - j);
         j += step;
@@ -593,7 +611,8 @@ const kB = 512;
 const kT = 512;
 const kS = 512;
 const kLogMin = -14.0;
-const kEscapeLogMax = 10.0;
+/** ln( b - b_c ) at the far end: b ~ 270,000, past every ray from kHoleFar. */
+const kEscapeLogMax = 12.5;
 const kStep = 2.0e-3;
 const kCaptureLogMax = 1.6447;
 
@@ -710,7 +729,7 @@ const CaptureB = (i) => kCritical - Math.exp(kLogMin + ((kCaptureLogMax - kLogMi
 /**
  * geodesic::Get(): the textures' contents. `orbits` is [ b ][ j ] x RGBA
  * (phi_in and u / u_end for the escape branch, the same for capture), `ends`
- * [ b ] x RGBA (u_end, phi_end escape; u_end, phi_end capture), both float as
+ * [ b ] x RGBA (b u_end, phi_end escape; u_end, phi_end capture), both float as
  * the plugin stores them; the doubles are kept for the cross-check.
  */
 function GeodesicTables() {
@@ -728,7 +747,8 @@ function GeodesicTables() {
     phiEndEscape[i] = r.phiEnd;
     for (let j = 0; j < kT; j += 1) orbits[(i * kT + j) * 4 + 0] = phiRow[j];
     for (let j = 0; j < kS; j += 1) orbits[(i * kT + j) * 4 + 1] = uRow[j];
-    ends[i * 4 + 0] = r.uEnd;
+    // b u_end, not u_end: it runs smoothly to 1 where u_end falls as 1/b.
+    ends[i * 4 + 0] = EscapeB(i) * r.uEnd;
     ends[i * 4 + 1] = r.phiEnd;
 
     r = fillRow(CaptureB(i), phiRow, uRow);
@@ -888,6 +908,9 @@ class SlipstreamFrames {
     const shutter = ShutterFromParam(params[PT.SHUTTER]);
     const shutterZ = max2(0.0, -this.camera.OffsetAt(1.0 - shutter));
     this.shutterZ = shutterZ;
+    // The part of that run that is only Cruise Speed: the clip cruises with
+    // the camera, so this much of it smears nothing.
+    const cruiseZ = CruiseFromParam(params[PT.CRUISE_SPEED]) * kDepth * shutter * max2(dt, 0.0);
     const open = PoseAt(look, j0 + (j1 - j0) * (1.0 - shutter), settings);
     const close = PoseAt(look, j1, settings);
     this.holeD = look === Look.BlackHole ? close.holeD : 0.0;
@@ -896,6 +919,7 @@ class SlipstreamFrames {
     // The flash: a crossing of one of the look's flash points this frame,
     // then an exponential decay, averaged over the open shutter.
     //-------------------------------------------------------------------
+    let crossAt = -1.0;
     {
       let crossed = false;
       let sinceCross = 0.0;
@@ -911,6 +935,7 @@ class SlipstreamFrames {
         if (at >= 0.0) {
           crossed = true;
           sinceCross = (1.0 - at) * dt;
+          crossAt = at;
         }
       }
       this.flashAge = crossed ? sinceCross : this.flashAge + dt;
@@ -928,7 +953,10 @@ class SlipstreamFrames {
     }
 
     // The whirlpool's spin and the disc's clock: phases kept small in double.
-    this.spinClock = (this.spinClock + dt * (0.4 + 1.6 * close.speed) * close.twist) % (18.0 * kPi);
+    // Swirl sets the clouds' spin as well as the whirlpool's turn; its
+    // default, 3 turns, is the rate as it was.
+    const spinRate = (0.4 + 1.6 * close.speed) * close.twist * SwirlTurnsFromParam(params[PT.SWIRL]) / 3.0;
+    this.spinClock = (this.spinClock + dt * spinRate) % (18.0 * kPi);
     this.discClock = (this.discClock + dt * kDiscRate) % kDiscPeriod;
 
     const exposure = ExposureFromParam(params[PT.EXPOSURE]);
@@ -981,6 +1009,7 @@ class SlipstreamFrames {
         uf('SwirlRadius', swirl),
         uf('Dispersion', look === Look.Warp ? clampF(PT.DISPERSION) : 0.0),
         uf('CopyLaw', 1.0),
+        uf('ChordLaw', 1.0),
         uf('FluxLaw', 1.0),
         uf('LengthLaw', 1.0),
       ];
@@ -1006,7 +1035,9 @@ class SlipstreamFrames {
     // The sky shows a third as many stars as the box does at rest.
     const probability = clamp(((starCount / 3.0) * cellSolid) / frameSolid, 0.0, 1.0);
     passes.scene = [
-      ui('Stars', 0), ui('ClipE', 1), ui('Orbits', 2), ui('Ends', 3), ui('Blackbody', 4),
+      ui('Stars', 0), ui('ClipE', 1), ui('Orbits', 2), ui('Ends', 3),
+      uf('EndsLaw', 1.0),
+      ui('Blackbody', 4),
       ui('LookId', look),
       ui('IsEffect', isEffect ? 1 : 0),
       uf('Raster', width, height),
@@ -1017,8 +1048,9 @@ class SlipstreamFrames {
       uf('ClipThrough', through),
       uf('LightGain', exposure),
       uf('TintColour', tint[0], tint[1], tint[2]),
-      // Hyperspace: the clip's smear, k = 1 + dZ / Clip Depth, and its share.
-      uf('SmearK', 1.0 + shutterZ / (clipDepth * kDepth)),
+      // Hyperspace: the clip's smear, k = 1 + dZ / Clip Depth with dZ the run
+      // beyond cruising, and its share.
+      uf('SmearK', 1.0 + max2(shutterZ - cruiseZ, 0.0) / (clipDepth * kDepth)),
       uf('ClipShare', clipShare),
       uf('TunnelLight', clampF(PT.TUNNEL) * close.tunnel * exposure * kTunnelGain),
       uf('LongZ', this.camera.LongZ()),
@@ -1036,6 +1068,9 @@ class SlipstreamFrames {
       uf('Twist1', twist1),
       uf('MouthRadius', close.mouth * height),
       uf('EndLight', close.endLight * height),
+      // The end light's exposure: 8 at full, and as it fades its developed
+      // light, 1 - exp( -E ), falls evenly with endGlow.
+      uf('EndGlow', -Math.log(1.0 - clamp(close.endGlow, 0.0, 1.0) * (1.0 - Math.exp(-8.0))) * exposure),
       uf('CloudLight', exposure * kCloudGain),
       uf('CloudDensity', clampF(PT.CLOUDS)),
       uf('Spin', this.spinClock),
@@ -1073,7 +1108,12 @@ class SlipstreamFrames {
       ui('SceneE', 0), ui('ClipIn', 1),
       ui('IsEffect', isEffect ? 1 : 0),
       uf('MixAmount', isEffect ? clampF(PT.MIX) : 1.0),
-      uf('Blackout', close.blackout),
+      // The frame that comes out of the white hole is black for the part of
+      // its open shutter before the crossing, not the plain space of the pose
+      // at shutter close.
+      uf('Blackout', look === Look.BlackHole && crossAt >= 0.0
+        ? max2(close.blackout, open.blackout * clamp((crossAt - (1.0 - shutter)) / shutter, 0.0, 1.0))
+        : close.blackout),
       uf('FlashLight', this.flashLight),
       ui('FlashKind', look),
       uf('FlashAge', min2(max2(this.flashAge - 0.5 * shutter * dt, 0.0), 1.0e4)),
@@ -1406,8 +1446,8 @@ const mounted = mountDemo({
   params: PARAMS,
 
   differences: [
-    'The CPU half is a PORT, not the plugin’s code. The plugin flies its camera on the CPU in double (Flight.cpp: the journey, its four drives, the camera’s distance integrated across each frame, each look’s script), maps its controls there (Controls.cpp), and builds two tables there once: the blackbody colours (Blackbody.cpp: Planck’s law against a fit of the CIE colour matching functions) and the black hole’s light paths (Geodesic.cpp: 1,024 orbits integrated by RK4). Here all of that is JavaScript, whose numbers are doubles too. A check in the repository runs the port and the plugin’s own C++ side by side and compares what they print: every control’s mapping at every slider position, every look’s script, the drives through jumps abandoned halfway, the camera, both tables. With the plugin’s own libm results replayed into the port, all 85,019 lines are identical to the bit. On this page’s own Math, which differs from Apple’s libm in the last bit of about one result in ten, the doubles drift by a few units in the last place, and every float the GPU reads from the tables is still the same.',
-    'The frame logic is a port too: the part of the plugin’s ProcessOpenGL that turns the controls and the clock into each pass’s uniforms (the shutter’s distance, the flash averaged over the open shutter, the whirlpool’s and the disc’s clocks, the sky’s star density, the black hole’s distance). The same check drives the real plugin class through 9,864 frames of both plugins in a GL context, reads every uniform back out of its four shader programs after every frame, and requires this page’s values to be the same floats; they are, all of them, even on this page’s own Math and against the plugin as built for Apple Silicon. It does not check this page’s GL calls (the binding, the blending, the buffers), which only a reader checks. Frames drawn here were compared once with the plugin’s own harness at the same settings (1280 × 720, 180 frames, held mid-journey): for all four looks of SW Slipstream and three of SW Slip Over, six of the seven came out 99.95% to 99.995% identical with every other pixel within one level of 255. The seventh, the Over’s black hole on the geometry card, is 99.87% identical; 0.1% of its pixels differ by more than one level (472, 0.05%, by 5 to 11), nearly all on the disc’s hard outer edge and the rim of the shadow, where a rounding difference decides disc or clip.',
+    'The CPU half is a PORT, not the plugin’s code. The plugin flies its camera on the CPU in double (Flight.cpp: the journey, its four drives, the camera’s distance integrated across each frame, each look’s script), maps its controls there (Controls.cpp), and builds two tables there once: the blackbody colours (Blackbody.cpp: Planck’s law against a fit of the CIE colour matching functions) and the black hole’s light paths (Geodesic.cpp: 1,024 orbits integrated by RK4). Here all of that is JavaScript, whose numbers are doubles too. A check in the repository runs the port and the plugin’s own C++ side by side and compares what they print: every control’s mapping at every slider position, every look’s script, the drives through jumps abandoned halfway, the camera, both tables. With the plugin’s own libm results replayed into the port, all 90,546 lines are identical to the bit. On this page’s own Math, which differs from Apple’s libm in the last bit of about one result in ten, the doubles drift by a few units in the last place, and every float the GPU reads from the tables is still the same.',
+    'The frame logic is a port too: the part of the plugin’s ProcessOpenGL that turns the controls and the clock into each pass’s uniforms (the shutter’s distance, the flash averaged over the open shutter, the whirlpool’s and the disc’s clocks, the sky’s star density, the black hole’s distance). The same check drives the real plugin class through 9,976 frames of both plugins in a GL context, reads every uniform back out of its four shader programs after every frame, and requires this page’s values to be the same floats; they are, all of them, even on this page’s own Math and against the plugin as built for Apple Silicon. It does not check this page’s GL calls (the binding, the blending, the buffers), which only a reader checks. Frames drawn here were compared once with the plugin’s own harness at the same settings (1280 × 720, 180 frames, held mid-journey): of ten cases across both plugins and all four looks, nine came out 99.95% to 99.995% identical with every other pixel within one level of 255. The tenth, the Over’s black hole held on the geometry card, is 99.97% identical; 48 of its 921,600 pixels differ by more than one level (13 by more than four, at most 11), on the disc’s hard outer edge, where a rounding difference decides disc or clip.',
     'The GPU half is not a port: the intake, star, scene and composite passes are the plugin’s own GLSL, on the same half-float buffers (WebGL2 needs EXT_color_buffer_float to render into them, and the page stops and says so without it), the blackbody table filtered and the orbit tables read with texelFetch as in the plugin. demo/tools/check_shaders.py fails the repository’s verify script if a character of them, or the way they are joined, drifts.',
     'Precision: GLSL ES 3.00 is not GLSL 4.10. The kit declares highp everywhere it can, but the star pass reads the blackbody table in its VERTEX shader, where GLSL ES’s default sampler precision is lowp and the kit does not override it; desktop drivers ignore that, a phone’s may not. Without OES_texture_float_linear the blackbody table falls back to half float, and the line under the picture says so.',
     'Nothing audio: the plugin has no audio input and no beat sync, so nothing is missing. (In Resolume a jump on the beat is Jump mapped to a beat.)',

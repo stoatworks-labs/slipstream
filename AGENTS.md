@@ -298,14 +298,16 @@ the release session, from langton's demo. What a reader of it must know:
 - **The CPU half is a port, held to the C++ to the bit.** `demo/plugin.js`'s PORT block
   (Controls, Flight, Blackbody, Geodesic) and FRAME block (ProcessOpenGL's CPU half,
   written to RETURN each pass's uniforms) run under node in `demo/tools/crosscheck/`:
-  `printer.cpp` on the plugin's own four GL-free sources (85,019 lines: every slider
-  position, every look's script across J, every drive at 60/50/30 fps, the camera, all
-  675 whole-frame Transit Times of the first trap, both tables), and `uniforms.cpp`
-  driving the REAL `SlipstreamPlugin` in a CGL context through `scenario.mjs`'s 9,864
+  `printer.cpp` on the plugin's own four GL-free sources (90,546 lines: every slider
+  position, every look's script across J at four hold distances, one past kHoleFar, every
+  drive at 60/50/30 fps, the camera, all 675 whole-frame Transit Times of the first trap
+  and all 675 whole-frame Cruise Times of the Loop's, both tables), and `uniforms.cpp`
+  driving the REAL `SlipstreamPlugin` in a CGL context through `scenario.mjs`'s 9,976
   frames of both plugins (every look, every drive, a jump abandoned halfway, a fader
-  scrubbed back through the flash points, raster changes, a stalled, reversed and jumping
-  clock), reading every active uniform back with glGetUniform after each frame.
-  **Identical**: every line, every frame's CPU doubles, all 917,352 uniform values.
+  scrubbed back through the flash points and wrapped round, the Wormhole's way out, the
+  white hole crossed at different points of a frame, raster changes, a stalled, reversed
+  and jumping clock), reading every active uniform back with glGetUniform after each
+  frame. **Identical**: every line, every frame's CPU doubles, all 957,696 uniform values.
 - **Two things had to be taken out for that to be exact, and both are measured instead.**
   V8's Math is not Apple's libm: about one distinct exp, expm1, asin or sin/cos result in
   ten differs in the last bit (pow and log2 never did). `libm_record.c` is interposed
@@ -316,23 +318,35 @@ the release session, from langton's demo. What a reader of it must know:
   arm64's default `-ffp-contract=on` fuses multiply-adds that JavaScript cannot, so the C++
   is built `-ffp-contract=off` (the x86_64 slice's arithmetic). **On V8's own Math and
   against the native arm64 build** -- what the page actually is against what ships --
-  every uniform in the 9,864 frames is still the same float; the CPU doubles differ by up
-  to 1e-10 (the hole's distance); 5 of 1,051,648 table floats differ by one ulp from the
+  every uniform in the 9,976 frames is still the same float; the CPU doubles differ by up
+  to 1e-10 (the hole's distance); 6 of 1,051,648 table floats differ by one ulp from the
   arm64 build's (none from the strict one's).
-- **Mutants**: twelve one-token mutants of the port (the first trap's fix undone, the
-  camera's trapezoid, the orbit equation's 3u², a CIE lobe weight, Hole Size's range, the
-  warp's spring, the sky's mean light, the flash's age at mid-shutter, the whirlpool's spin
-  rate, a new look's flash, the clock's jump rule, the Over's clip levels): all twelve
-  caught (2026-10-25), the first six by the port's printout, the rest by the frames'.
+- **Ported to 2d3b679's pre-release fixes the same day** (the reach of the orbit table
+  and b u_end in its ends, the Loop's rest step, the fader's wrap, the clip not smeared by
+  cruising, the white hole's crossing frame, Swirl in the spin, EndGlow, ChordLaw and
+  EndsLaw): check_shaders.py caught the three changed pieces before anything was
+  re-spliced, and the port was identical to the plugin again on its first run.
+- **Mutants**: 23 one-token mutants of the port and frame logic, all caught (2026-10-25,
+  on 2d3b679): the first trap's fix undone, the camera's trapezoid, the orbit equation's
+  3u², a CIE lobe weight, Hole Size's range, the warp's spring, the sky's mean light, the
+  flash's age at mid-shutter, the whirlpool's spin rate and Swirl's share of it, a new
+  look's flash, the clock's jump rule, the Over's clip levels, and one for each of
+  2d3b679's fixes (the Loop's rest step, the fader's wrap, b u_end, the table's reach,
+  cruising smearing the clip, the end light's exposure, the white hole's blackout share,
+  the white-out's fade, ChordLaw, the approach from past kHoleFar).
 - **The GL half only a reader checks** (the bindings, the additive blend, the buffers),
   so frames were compared ONCE with `sliptest --out` at the same settings: 1280x720, 180
   frames on the f/60 clock, Drive Fader held mid-journey, the page's last frame read
   straight off its canvas, the Over's clip the kit's geometry card handed to the harness
-  with `--clip`. SW Slipstream, all four looks: 99.95-99.995% of pixels identical, none
-  more than one level of 255 out. SW Slip Over, Hyperspace and Warp: 99.98% and 99.995%,
-  none more than one level. SW Slip Over, Black Hole: 99.87% identical; 472 pixels
-  (0.05%) differ by 5 to 11 levels, nearly all on the disc's hard outer edge and the
-  shadow's rim, where a float rounding decides disc or clip against the bright card.
+  with `--clip`; against 2d3b679's sliptest. SW Slipstream, all four looks
+  mid-journey, the Wormhole's way out (J 0.85: the chord fade, the fading white-out) and the
+  Black Hole's approach (J 0.1): 99.95-99.995% of pixels identical, none more than one
+  level of 255 out. SW Slip Over, Hyperspace, Warp and the Black Hole's approach: 99.98-
+  99.995%, none more than one level. SW Slip Over, Black Hole held: 99.97% identical; 48
+  of 921,600 pixels differ by more than one level, 13 by more than four (at most 11), on
+  the disc's hard outer edge and its tips, where a float rounding decides disc or clip
+  against the bright card. (Before 2d3b679 that was 472 pixels over four levels, most of
+  them the clip seen past the hole: it is now read at its own pixels' mip level.)
 - **Decided without asking**: both plugins on one page (langton's shape, `?plugin=over`,
   a new instance at the defaults); Stars (FF_TYPE_INTEGER 0-20,000) a dropdown of fifteen
   values including the default 4,000, the slot stored; Jump a toggle released after a

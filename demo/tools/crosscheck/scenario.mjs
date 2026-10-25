@@ -81,6 +81,15 @@ function drives() {
   set(PT.LOOK, 3);
   for (let k = 0; k <= 40; k += 1) { set(PT.JOURNEY, 0.3 + k / 50); tick(1 / 60); }
   set(PT.LOOK, 1); set(PT.JOURNEY, 0.32); tick(1 / 60); set(PT.JOURNEY, 0.66); tick(1 / 60); set(PT.JOURNEY, 0.2); tick(1 / 60);
+  // A fader that wraps: 0.98 to 0.03 is forward through normal space, and so
+  // is 0.9 to 0.3 (back more than half a trip has gone round); 0.6 to 0.2 is back.
+  for (const j of [0.98, 0.03, 0.9, 0.3, 0.6, 0.2, 1.0, 0.0]) { set(PT.JOURNEY, j); tick(1 / 60); }
+  // The Wormhole's way out and its fading white-out, then the white hole
+  // crossed at a different point of each frame.
+  set(PT.LOOK, 2);
+  for (let k = 0; k <= 40; k += 1) { set(PT.JOURNEY, 0.7 + k * 0.0075); tick(1 / 60); }
+  set(PT.LOOK, 3); set(PT.JOURNEY, 0.7); tick(1 / 60);
+  for (const j of [0.79, 0.805, 0.79, 0.8125, 0.79, 0.85]) { set(PT.JOURNEY, j); tick(1 / 60); }
   // Loop again, with the clock misbehaving: 30 fps, a stall, a step back, a
   // jump of more than a second, irregular steps.
   set(PT.DRIVE, 2); set(PT.LOOK, 0); set(PT.CRUISE_TIME, 0.1);

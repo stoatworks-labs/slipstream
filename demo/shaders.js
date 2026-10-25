@@ -207,6 +207,7 @@ uniform float Pull0, Pull1, Twist0, Twist1;
 uniform float Stretch, PinchRadius, SwirlRadius;
 uniform float Dispersion;
 uniform float CopyLaw;
+uniform float ChordLaw;
 uniform vec4 TestStar;
 
 flat out vec3 starLight;
@@ -250,6 +251,14 @@ void main()
 
 	vec2 inner = warpRel( dir * ( Focal * rho / zInner ), Pull0, Twist0, Stretch, PinchRadius, SwirlRadius );
 	vec2 outer = warpRel( dir * ( Focal * rho / zOuter ), Pull1, Twist1, Stretch, PinchRadius, SwirlRadius );
+	//The whirlpool turns each end of a streak by its own angle. A streak
+	//whose ends it turns more than a quarter of a radian apart is no longer
+	//near the straight chord drawn here (a long line across the frame), so
+	//it fades out by three quarters of a radian: the Wormhole's one cheat
+	//with the stars.
+	float qIn  = Focal * rho / zInner / SwirlRadius, qOut = Focal * rho / zOuter / SwirlRadius;
+	float turn = abs( Twist0 / ( 1.0 + qIn * qIn ) - Twist1 / ( 1.0 + qOut * qOut ) );
+	float held = ChordLaw > 0.5 ? 1.0 - smoothstep( 0.25, 0.75, turn ) : 1.0;
 	vec2 axis  = outer - inner;
 	float len  = length( axis );
 	vec2 along = len > 1.0e-4 ? axis / len : vec2( 1.0, 0.0 );
@@ -264,7 +273,7 @@ void main()
 	local        = vec2( a, c );
 
 	vec3 chroma = mix( vec3( 1.0 ), blackbodyColour( kelvin ), StarColour );
-	starLight   = chroma * luminosity * StarGain;
+	starLight   = chroma * luminosity * StarGain * held;
 	segment     = vec4( len, rho, 1.0 / zInner, 1.0 / zOuter );
 	depths      = vec4( zc, ShutterZ, ratio, earlier ? 1.0 : 0.0 );
 }
@@ -361,6 +370,7 @@ uniform float Pull0, Pull1, Scale0, Scale1;
 uniform float Twist0, Twist1;
 uniform float MouthRadius;
 uniform float EndLight;
+uniform float EndGlow;
 uniform float CloudLight;
 uniform float CloudDensity;
 uniform float Spin;
@@ -380,6 +390,7 @@ uniform float StarColour;
 uniform uint StarSeed;
 uniform float BendLaw;
 uniform float CaptureLaw;
+uniform float EndsLaw;
 uniform float SpinSign;
 uniform float DiscTexture;
 uniform float SeamForTest;
@@ -388,7 +399,7 @@ out vec4 Scene;
 
 const float B_CRIT   = 5.196152422706632;
 const float LOG_MIN  = -14.0;
-const float ESC_MAX  = 10.0;
+const float ESC_MAX  = 12.5;
 const float CAP_MAX  = 1.6447;
 const int TABLE_B    = 512;
 const int TABLE_T    = 512;
@@ -428,10 +439,11 @@ vec3 clipSmear( vec2 rel )
 		return clipAt( Vanish + rel, 0.0 );
 	//The mip level half a step coarser than the taps' spacing: the taps'
 	//sum then aliases by under 1% (a blur of 0.57 spacings), and the smear
-	//shows no copies of itself.
+	//shows no copies of itself. Taps under 0.7 px apart read the full
+	//picture: a smear shorter than the picture's own pixels blurs nothing.
 	const int N = 32;
 	float du  = ( SmearK - 1.0 ) / float( N );
-	float lod = clamp( log2( max( du * length( rel ), 1.0 ) ) + 0.5, 0.0, ClipLevels );
+	float lod = clamp( log2( max( du * length( rel ), 1.0e-6 ) ) + 0.5, 0.0, ClipLevels );
 	vec3 sum  = vec3( 0.0 );
 	for( int i = 0; i < N; ++i )
 		sum += clipMirrored( Vanish + rel * ( 1.0 + du * ( float( i ) + 0.5 ) ), lod );
@@ -589,7 +601,7 @@ vec3 wormhole( vec2 rel, vec3 starLight )
 		e            = mix( scene, clouds, inside );
 	}
 	if( EndLight > 0.0 )
-		e += vec3( 8.0 ) * ( 1.0 - smoothstep( 0.75 * EndLight, EndLight, r ) );
+		e += vec3( EndGlow ) * ( 1.0 - smoothstep( 0.75 * EndLight, EndLight, r ) );
 	return e;
 }
 
@@ -646,6 +658,49 @@ vec3 faceDirection( int face, vec2 st )
 	if( face == 4 ) return normalize( vec3( st.x, st.y, 1.0 ) );
 	return normalize( vec3( st.x, st.y, -1.0 ) );
 }
+/// One face's stars within five sigmas of direction n, which can be just
+/// off that face: a pixel near a seam reads the face across it too.
+vec3 faceStars( int face, vec3 n, float sigma )
+{
+	int axis    = face / 2;
+	float along = axis == 0 ? n.x : ( axis == 1 ? n.y : n.z );
+	along       = ( face & 1 ) == 0 ? along : -along;
+	if( along < 0.3 )
+		return vec3( 0.0 );
+	vec2 st = ( axis == 0 ? n.yz : ( axis == 1 ? n.xz : n.xy ) ) / along;
+	//A cell's angle shrinks towards the face's edges, by 1 + s^2 + t^2 at
+	//most: reach five sigmas in the smallest.
+	vec2 sc        = clamp( st, -1.0, 1.0 );
+	float cellHere = 2.0 / SkyCells / ( 1.0 + dot( sc, sc ) );
+	vec2 cell      = ( st * 0.5 + 0.5 ) * SkyCells;
+	ivec2 c0       = ivec2( floor( cell ) );
+	int cells      = int( SkyCells );
+	int across     = clamp( int( ceil( 5.0 * sigma / cellHere ) ), 1, 6 );
+	vec3 sum       = vec3( 0.0 );
+	for( int dy = -across; dy <= across; ++dy )
+		for( int dx = -across; dx <= across; ++dx )
+		{
+			ivec2 cc = c0 + ivec2( dx, dy );
+			if( cc.x < 0 || cc.y < 0 || cc.x >= cells || cc.y >= cells )
+				continue;
+			uint h = mixHash( uint( cc.x ), uint( cc.y ), StarSeed ^ ( uint( face ) * 0x9e3779b9u ) );
+			if( unitFloat( h ) >= SkyProbability )
+				continue;
+			h = pcg( h );
+			float ox = unitFloat( h );
+			h = pcg( h );
+			float oy = unitFloat( h );
+			h = pcg( h );
+			float luminosity = starLuminosity( h );
+			h = pcg( h );
+			float kelvin = starKelvin( h );
+			vec3 sdir = faceDirection( face, ( vec2( cc ) + vec2( ox, oy ) ) / SkyCells * 2.0 - 1.0 );
+			vec3 off  = n - sdir;
+			float g   = exp( -0.5 * dot( off, off ) / ( sigma * sigma ) ) / ( TAU * sigma * sigma );
+			sum += luminosity * g * mix( vec3( 1.0 ), blackbodyColour( kelvin ), StarColour );
+		}
+	return sum;
+}
 vec3 skyStars( vec3 n, float extra )
 {
 	vec3 a = abs( n );
@@ -668,53 +723,37 @@ vec3 skyStars( vec3 n, float extra )
 	}
 	float cellAngle = 2.0 / SkyCells;
 	float sigma     = sqrt( SkySigma * SkySigma + extra * extra );
-	//A blur wider than a cell sees the field's mean light. Below that the
-	//neighbourhood reaches three sigmas past the pixel's own cell, so no
-	//star's Gaussian is cut square at a cell's edge.
+	//A blur wider than a cell sees the field's mean light.
 	float meanWeight = smoothstep( 0.8 * cellAngle, 1.0 * cellAngle, sigma );
 	vec3 sum = vec3( 0.0 );
 	if( meanWeight < 1.0 )
 	{
-		vec2 cell  = ( st * 0.5 + 0.5 ) * SkyCells;
-		ivec2 c0   = ivec2( floor( cell ) );
-		int cells  = int( SkyCells );
-		int across = clamp( int( ceil( 3.0 * sigma / cellAngle ) ), 1, 3 );
-		for( int dy = -across; dy <= across; ++dy )
-			for( int dx = -across; dx <= across; ++dx )
-			{
-				ivec2 cc = c0 + ivec2( dx, dy );
-				if( cc.x < 0 || cc.y < 0 || cc.x >= cells || cc.y >= cells )
-					continue;
-				uint h = mixHash( uint( cc.x ), uint( cc.y ), StarSeed ^ ( uint( face ) * 0x9e3779b9u ) );
-				if( unitFloat( h ) >= SkyProbability )
-					continue;
-				h = pcg( h );
-				float ox = unitFloat( h );
-				h = pcg( h );
-				float oy = unitFloat( h );
-				h = pcg( h );
-				float luminosity = starLuminosity( h );
-				h = pcg( h );
-				float kelvin = starKelvin( h );
-				vec3 sdir = faceDirection( face, ( vec2( cc ) + vec2( ox, oy ) ) / SkyCells * 2.0 - 1.0 );
-				vec3 off  = n - sdir;
-				float g   = exp( -0.5 * dot( off, off ) / ( sigma * sigma ) ) / ( TAU * sigma * sigma );
-				sum += luminosity * g * mix( vec3( 1.0 ), blackbodyColour( kelvin ), StarColour );
-			}
+		sum = faceStars( face, n, sigma );
+		//Within five sigmas of a seam, the stars of the face across it: each
+		//star belongs to one face, so the sum counts none twice and cuts
+		//none at the seam.
+		float reach = 5.0 * sigma * ( 1.0 + dot( st, st ) );
+		int axis    = face / 2;
+		int sAxis   = axis == 0 ? 1 : 0, tAxis = axis == 2 ? 1 : 2;
+		if( abs( st.x ) > 1.0 - reach )
+			sum += faceStars( 2 * sAxis + ( st.x > 0.0 ? 0 : 1 ), n, sigma );
+		if( abs( st.y ) > 1.0 - reach )
+			sum += faceStars( 2 * tAxis + ( st.y > 0.0 ? 0 : 1 ), n, sigma );
 	}
 	return SkyGain * mix( sum, vec3( SkyMean ), meanWeight );
 }
 
 /// The sky along an escaping direction: the clip where the camera's own
 /// frustum would have seen it (Over), the starfield everywhere else.
-vec3 skyAlong( vec3 n, float footprint, float plain )
+/// clipScale is the pixel's footprint on the clip, in the clip's pixels.
+vec3 skyAlong( vec3 n, float footprint, float plain, float clipScale )
 {
 	if( IsEffect == 1 && n.z > 1.0e-4 )
 	{
 		vec2 px = Vanish + Focal * n.xy / n.z;
 		if( px.x >= 0.0 && px.y >= 0.0 && px.x < Raster.x && px.y < Raster.y )
 		{
-			float lod = clamp( log2( max( footprint * Focal / ( n.z * n.z ), 1.0 ) ), 0.0, ClipLevels );
+			float lod = clamp( log2( max( clipScale, 1.0e-6 ) ), 0.0, ClipLevels );
 			return textureLod( ClipE, px / Raster, lod ).rgb;
 		}
 	}
@@ -772,7 +811,8 @@ vec3 blackHole( vec2 rel, out float opaque )
 		{
 			ray.row = clamp( ( log( max( ray.b - B_CRIT, 1.0e-30 ) ) - LOG_MIN ) / ( ESC_MAX - LOG_MIN ), 0.0, 1.0 ) * float( TABLE_B - 1 );
 			vec4 e  = tableAt( Ends, 0.0, ray.row, 1 );
-			ray.uEnd   = e.r;
+			//b u_end (--approach's negative control: u_end itself).
+			ray.uEnd   = EndsLaw > 0.5 ? e.r / ray.b : e.r;
 			ray.phiEnd = e.g;
 		}
 		else
@@ -799,6 +839,12 @@ vec3 blackHole( vec2 rel, out float opaque )
 	//Where the ray goes if it gets away.
 	vec3 n = cos( alphaEnd ) * er + sin( alphaEnd ) * et;
 	float footprint = length( dFdx( n ) ) + length( dFdy( n ) );
+	//Its footprint on the Over's clip, in the clip's pixels, by the rule the
+	//GPU's own mip selection uses: 1 for a ray the hole has not bent, the
+	//clip at its own resolution. (The angle above, turned into pixels, was
+	//never under 1 and blurred the whole clip a little.)
+	vec2 onClip     = Focal * n.xy / max( n.z, 1.0e-4 );
+	float clipScale = max( length( dFdx( onClip ) ), length( dFdy( onClip ) ) );
 
 	//The disc: where the ray's orbit plane crosses the disc's.
 	vec3 no    = cross( er, k );
@@ -887,7 +933,7 @@ vec3 blackHole( vec2 rel, out float opaque )
 		return light;
 	}
 	if( !hit )
-		light += skyAlong( n, 0.5 * footprint, 0.5 * plain );
+		light += skyAlong( n, 0.5 * footprint, 0.5 * plain, clipScale );
 	return light;
 }
 
@@ -938,7 +984,7 @@ vec3 flash( vec2 p )
 		return FlashLight * vec3( 0.9, 0.95, 1.0 ) * ( 0.5 + 3.0 * exp( -r / ( 0.12 * H ) ) );
 	if( FlashKind == 1 )
 	{
-		//Star Trek's: a core, a horizontal anamorphic streak, a ring
+		//The warp flash: a core, a horizontal anamorphic streak, a ring
 		//running out from the vanishing point.
 		float core   = 14.0 * exp( -0.5 * r * r / ( 0.02 * H * 0.02 * H ) );
 		float sx     = rel.x / ( 0.55 * Raster.x ), sy = rel.y / ( 0.006 * H );
