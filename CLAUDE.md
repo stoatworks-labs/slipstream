@@ -92,12 +92,13 @@ shader's second half).
 - `slipstream_core` is an OBJECT library: each plugin registers itself from a file-scope
   constructor nothing references.
 - The macOS build must be universal. Check with `lipo`, never the build log.
-- **Provisional hand copies:** `source/StoatworksAbout*.h` (guide = "", no user guide yet)
-  and `ATTRIBUTIONS.md`. Once the project is registered in stoatworks-backend,
-  `sync-about.py` and `sync-attributions.py` generate them; edit them there then.
-- Local only: `~/Projects/resolume/slipstream` (built in `~/dev/slipstream` and moved), no
-  remote, nothing released, not on the website. It is a checkout under `~/Projects`, so
-  changes go through a worktree; with no remote, branch it from local `main` and merge back.
+- **Generated, do not edit:** `source/StoatworksAbout*.h` (stoatworks-backend
+  `scripts/sync-about.py`, from the website's projects.json), `ATTRIBUTIONS.md` and the
+  README's `attributions` block (`scripts/sync-attributions.py`), `.github/ISSUE_TEMPLATE/`
+  (`scripts/sync-issue-templates.py`) and `.github/FUNDING.yml` (the fleet's, byte for byte).
+  Edit their sources in the backend.
+- Public: `github.com/stoatworks-labs/slipstream`, checkout `~/Projects/resolume/slipstream`
+  (built in `~/dev/slipstream` and moved). Changes go through a worktree.
 
 ## Not done yet
 - Never loaded into Resolume on either platform. Never built for Windows. No GPU but this

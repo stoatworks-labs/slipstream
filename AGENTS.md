@@ -77,8 +77,9 @@ blurs with the stars.
   where that is wider than a cell) rather than a cube map: resolution-independent, and a
   star smeared by the hole blurs instead of aliasing. Stars at a cube face's edge can be
   cut at the seam; not seen in renders, not fixed.
-- **Provisional hand copies:** `source/StoatworksAbout*.h` (adapted from ferrofluid's,
-  `guide = ""`) and `ATTRIBUTIONS.md`, until the project is registered in stoatworks-backend.
+- **Generated files:** `source/StoatworksAbout*.h`, `ATTRIBUTIONS.md`, the README's
+  attributions block, `.github/ISSUE_TEMPLATE/` and `.github/FUNDING.yml` come from
+  stoatworks-backend's sync scripts since the project was registered (2026-10-25).
 
 ## The traps
 

@@ -1545,9 +1545,62 @@ int runNegative( bool offlineOnly = false )
 	return unfalsifiable == 0 ? 0 : 1;
 }
 
+/// A DRAFT of the fleet Arena gate's expectation (plugin-bench arena/expect),
+/// from what the plugins really declare: defaults are the floats the
+/// constructors set, not rounded literals (containment's trap). The `needs`,
+/// `inert` and `probe` fields are added by hand in plugin-bench, from
+/// tools/sweep.py's contexts.
 int runExpect()
 {
-	std::printf( "{ \"note\": \"the fleet Arena gate's expectation is drafted at release time\" }\n" );
+	auto escape = []( const std::string& s ) {
+		std::string out;
+		for( char c : s )
+		{
+			if( c == '"' || c == '\\' )
+				out += '\\';
+			out += c;
+		}
+		return out;
+	};
+	std::printf( "{\n  \"plugin\": \"slipstream\",\n  \"dlls\": [\"Slipstream.dll\", \"Slipstream Over.dll\"],\n"
+	             "  \"register\": [\n    {\"name\": \"SW Slipstream\", \"uid\": \"SR01\", \"kind\": \"source\"},\n"
+	             "    {\"name\": \"SW Slip Over\", \"uid\": \"SR02\", \"kind\": \"effect\"}\n  ],\n  \"params\": {\n" );
+	for( bool over : { false, true } )
+	{
+		SlipstreamPlugin plugin( over );
+		std::printf( "    \"%s\": [\n", over ? "SW Slip Over" : "SW Slipstream" );
+		const std::vector< NamedParameter > list = listParameters( plugin );
+		for( size_t i = 0; i < list.size(); ++i )
+		{
+			const NamedParameter& p = list[ i ];
+			std::string line        = "      {\"name\": \"" + escape( p.name ) + "\", ";
+			if( p.type == FF_TYPE_OPTION )
+				line += "\"type\": \"ParamChoice\", \"default\": \""
+				        + escape( plugin.GetParamElementName( p.index, static_cast< unsigned int >( std::lround( p.value ) ) ) ) + "\"";
+			else if( p.type == FF_TYPE_BOOLEAN )
+				line += std::string( "\"type\": \"ParamBoolean\", \"default\": " ) + ( p.value > 0.5f ? "true" : "false" );
+			else if( p.type == FF_TYPE_EVENT )
+			{
+				line += "\"type\": \"ParamEvent\"";
+				//FFGL's name field is 16 characters and Arena shows what it is
+				//given: a name of exactly 16 is declared as itself.
+				if( p.name.size() >= 16 )
+					line += ", \"declared\": \"" + escape( p.name ) + "\"";
+			}
+			else if( p.type == FF_TYPE_TEXT )
+				line += "\"type\": \"ParamString\", \"default_pattern\": \"^Slipstream\\\\ v{version}\\\\ \\\\-\\\\ MIT\\\\ \\\\-\\\\ Stoatworks\\\\ Labs,\\\\ stoatworks\\\\-labs\\\\.com$\"";
+			else
+			{
+				const float lo = p.type == FF_TYPE_INTEGER ? plugin.GetParamRange( p.index ).min : 0.0f;
+				const float hi = p.type == FF_TYPE_INTEGER ? plugin.GetParamRange( p.index ).max : 1.0f;
+				line += fmt( "\"type\": \"ParamRange\", \"min\": %.1f, \"max\": %.1f, \"default\": %.17g", lo, hi, static_cast< double >( p.value ) );
+			}
+			line += i + 1 < list.size() ? "},\n" : "}\n";
+			std::printf( "%s", line.c_str() );
+		}
+		std::printf( over ? "    ]\n" : "    ],\n" );
+	}
+	std::printf( "  }\n}\n" );
 	return 0;
 }
 
