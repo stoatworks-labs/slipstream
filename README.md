@@ -24,6 +24,8 @@ Over**, an effect in which your clip is the view out of the front window. (Yes, 
 is also a knitted tank top. FFGL gives a plugin sixteen characters for its name and they
 were all spoken for.)
 
+The [project page](https://stoatworks-labs.com/software/slipstream/) has the downloads, the [user guide](https://stoatworks-labs.com/software/slipstream/guide/) and the video.
+
 ![The four looks of SW Slipstream: stars stretched into streaks in a jump to hyperspace, warp streaks round a flash, a whirlpool of blue cloud, and a black hole with a golden disc lensed over and under its shadow](docs/hero.png)
 
 <sub>SW Slipstream's four looks, rendered by the plugin's offline harness (`sliptest`),
